@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 2,
+  "id": "discord-companion",
+  "name": "Discord Companion",
+  "version": "0.1.0",
+  "description": "See your Discord Desktop voice room and control your microphone in Orca on macOS.",
+  "cover": {
+    "path": "media/cover.jpg",
+    "alt": "Discord Companion title beside three voice room participants and a microphone on a purple background."
+  },
+  "engines": { "orca": ">=1.4.266" },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      { "id": "discord", "title": "Discord", "icon": "activity", "entry": "src/panel.tsx", "ui": "components" }
+    ],
+    "commands": [
+      { "id": "open-discord", "title": "Discord: Switch to Discord" }
+    ],
+    "statusBarItems": [
+      { "id": "discord-voice", "text": "Discord", "icon": "activity", "command": "open-discord" }
+    ]
+  }
+}
