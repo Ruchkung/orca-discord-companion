@@ -1,21 +1,25 @@
-export type Microphone = 'muted' | 'unmuted' | 'unknown'
+export type Microphone = 'muted' | 'unmuted'
+
+/** What the panel offers when Discord is unavailable. */
+export type Fix = 'setup' | 'authorize' | 'open'
 
 export type DiscordState =
   | { kind: 'starting' }
-  | { kind: 'unavailable'; reason: string; canOpen: boolean }
+  | { kind: 'unavailable'; reason: string; fix: Fix | null }
   | { kind: 'idle'; microphone: Microphone }
   | {
       kind: 'connected'
-      room: string | null
+      room: string
       microphone: Microphone
-      participants: { name: string; muted: boolean }[] | null
-      canPopOut: boolean
+      participants: { name: string; muted: boolean }[]
     }
 
 export type DiscordAction =
   | { kind: 'open' }
   | { kind: 'pop-out' }
   | { kind: 'microphone'; muted: boolean }
+  | { kind: 'authorize' }
+  | { kind: 'setup'; clientId: string; clientSecret: string }
 
 declare module 'orca' {
   interface PluginRequests {

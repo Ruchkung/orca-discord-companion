@@ -3,13 +3,14 @@
   "id": "discord-companion",
   "name": "Discord Companion",
   "version": "0.1.0",
-  "description": "See your Discord Desktop voice room and control your microphone in Orca on macOS.",
+  "description": "See your Discord Desktop voice room and control your microphone in Orca on macOS and Windows through Discord RPC.",
   "cover": {
     "path": "media/cover.jpg",
     "alt": "Discord Companion title beside three voice room participants and a microphone on a purple background."
   },
   "engines": { "orca": ">=1.4.266" },
   "execution": "trusted-worker",
+  "capabilities": [{ "kind": "secrets:own" }],
   "pluginApi": 1,
   "main": "src/worker.ts",
   "contributes": {

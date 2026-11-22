@@ -1,5 +1,5 @@
 import type { OrcaWorkerApi } from 'orca/worker'
-import { desktop, type Desktop } from './discord-desktop'
+import { createDesktop, type Desktop } from './discord-desktop'
 import type { DiscordAction, DiscordState } from './protocol'
 
 function updateStatusBar(orca: OrcaWorkerApi, state: DiscordState) {
@@ -7,12 +7,12 @@ function updateStatusBar(orca: OrcaWorkerApi, state: DiscordState) {
     return orca.host.call('statusBar.update', { id: 'discord-voice', visible: false })
   }
 
-  const count = state.participants?.length
-  const room = state.room ?? 'Discord voice'
+  const count = state.participants.length
+  const room = state.room
   const microphone = state.microphone === 'muted' ? ' · Microphone muted' : ''
   return orca.host.call('statusBar.update', {
     id: 'discord-voice',
-    text: count === undefined ? room : room + ' · ' + count,
+    text: room + ' · ' + count,
     tooltip: room + microphone + ' · Switch to Discord',
     tone: state.microphone === 'muted' ? 'neutral' : 'accent',
     visible: true
@@ -21,8 +21,10 @@ function updateStatusBar(orca: OrcaWorkerApi, state: DiscordState) {
 
 function isDiscordAction(input: unknown): input is DiscordAction {
   if (typeof input !== 'object' || input === null || !('kind' in input)) return false
-  return input.kind === 'open' || input.kind === 'pop-out' ||
-    (input.kind === 'microphone' && 'muted' in input && typeof input.muted === 'boolean')
+  return input.kind === 'open' || input.kind === 'pop-out' || input.kind === 'authorize' ||
+    (input.kind === 'microphone' && 'muted' in input && typeof input.muted === 'boolean') ||
+    (input.kind === 'setup' && 'clientId' in input && typeof input.clientId === 'string' &&
+      'clientSecret' in input && typeof input.clientSecret === 'string')
 }
 
 export function start(orca: OrcaWorkerApi, connection: Desktop): () => void {
@@ -84,11 +86,14 @@ export function start(orca: OrcaWorkerApi, connection: Desktop): () => void {
     })
   ]
 
+  // Discord reports voice changes as they happen; the poll catches what it does not report.
+  const unwatch = connection.onChange(() => { void run(refresh).catch(() => undefined) })
   void poll()
 
   return () => {
     stopped = true
     clearTimeout(timer)
+    unwatch()
     for (const subscription of subscriptions) subscription.dispose()
   }
 }
@@ -96,7 +101,7 @@ export function start(orca: OrcaWorkerApi, connection: Desktop): () => void {
 let stop: (() => void) | undefined
 
 export default function activate(orca: OrcaWorkerApi): void {
-  stop = start(orca, desktop)
+  stop = start(orca, createDesktop({ vault: orca.secrets }))
 }
 
 export function deactivate(): void {

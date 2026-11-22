@@ -1,40 +1,45 @@
 # Discord Companion for Orca
 
-See the voice room, participant count, and microphone state from Discord Desktop in Orca on macOS. Click the status bar item to switch to the active call. Open the **Discord** sidebar to see the participant list and mute or unmute your mic.
+See your Discord Desktop voice room, its participants, and your microphone state in Orca on macOS and Windows. Mute or unmute from the **Discord** sidebar while Discord stays minimized or in the system tray. Click the status bar item to switch to the active call.
 
 ## Install
 
-1. Use Orca Desktop 1.4.266 or later on macOS. Install Discord Desktop and set its interface language to English.
+1. Use Orca Desktop 1.4.266 or later on macOS or Windows, and install Discord Desktop.
 2. From this folder, run `orca plugin dev load . --json`. Review the trusted worker approval, then run the approval command Orca prints.
-3. If Orca cannot read Discord, enable Orca in macOS **System Settings → Privacy & Security → Accessibility**.
-4. Open a Discord window. Join a voice room and open the call view to check the participant list in Orca.
+3. Create a Discord application. See [Connect a Discord application](#connect-a-discord-application).
+4. Open the **Discord** sidebar, enter the application ID and client secret, and select **Connect to Discord**.
+5. Select **Authorize** in the window Discord shows.
 
-The plugin reads the Discord window through Orca’s macOS Accessibility integration. It keeps the current call state in memory. It uses no bot, Discord token, or network service.
+## Connect a Discord application
 
-Discord supplies the room and roster through its visible accessibility controls. Orca omits the count when the participant list is unavailable. The connection can remain active after you switch to another Discord view.
+The plugin talks to Discord Desktop through Discord’s local RPC interface. Discord grants RPC voice control only to approved partners and to the testers of an unapproved application, so each person connects an application they own or test.
 
-**Pop out stream** appears when Discord exposes its native pop-out button in the call view. Use Discord’s **Stay On Top** control to keep the pop-out above Orca.
+1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and create an application.
+2. Under **OAuth2 → Redirects**, add `http://localhost`.
+3. Copy the **Application ID** from **General Information** and a client secret from **OAuth2 → Reset Secret**.
+4. To share the application, add up to 50 people under **App Testers**. Each tester connects with the same ID and secret. Testers follow the Thai guide in [docs/tester-guide.pdf](docs/tester-guide.pdf) ([.docx](docs/tester-guide.docx)).
+
+Orca stores the ID, secret, and Discord access token in the plugin’s encrypted secrets. The worker sends the secret and authorization code to `discord.com` only to get and refresh the access token. The plugin uses no bot and keeps the call state in memory.
+
+## What the sidebar does
+
+- **Mute mic** and **Unmute mic** change Discord’s microphone without bringing its window forward.
+- **Switch to voice room** shows Discord’s window, including from the system tray, and opens the current call with a `discord://` link.
+- **Pop out call** presses Discord’s **Pop Out** control in the call view through Orca’s accessibility integration. Open the call in Discord first. On macOS, enable Orca in **System Settings → Privacy & Security → Accessibility**. On Windows, Discord exposes the control only when it starts with `--force-renderer-accessibility`. **Open Discord** in the sidebar starts it that way.
+- Discord reports microphone and room changes as they happen. The sidebar also checks Discord every 2.5 seconds for roster changes.
 
 ## When Discord is unavailable
 
-- If Discord is closed, select **Open Discord** in the sidebar. The sidebar reads Discord again as its window becomes available.
-- If Discord has no accessible window, restore or open a window.
-- If macOS blocks access, enable Orca in **System Settings → Privacy & Security → Accessibility**.
-- The status bar item appears while you are in a voice room. On Windows and Linux, the sidebar displays the macOS requirement.
+- If Discord is closed, select **Open Discord** in the sidebar.
+- If Discord rejects the saved authorization, select **Authorize in Discord**.
+- If Discord rejects the application ID or client secret, the sidebar asks for them again.
+- Discord slows its answer when one application connects many times in a row. The sidebar keeps its last state until Discord answers.
 
-## Windows development
+## Development
 
-The worker and panel share the state types in `src/protocol.ts`. The desktop adapter in `src/discord-desktop.ts` currently runs only on macOS, and `src/accessibility.ts` parses its accessibility tree.
+The worker and panel share the state types in `src/protocol.ts`. `src/rpc.ts` speaks Discord’s IPC framing over the `discord-ipc-N` pipe. `src/discord-desktop.ts` holds authorization, voice state, and the macOS and Windows launch details. `src/accessibility.ts` finds the Pop Out control in Orca’s accessibility snapshot.
 
-On a Windows machine with Orca and Discord Desktop, run these read-only probes before adding the Windows adapter.
-
-```powershell
-orca.exe computer capabilities --json
-orca.exe computer list-apps --json
-orca.exe computer get-app-state --app Discord --no-screenshot --json
-```
-
-Use the app selector returned by `list-apps` if the name differs. Inspect the tree with Discord idle and while connected to a voice room. Redact names, IDs, and unrelated window content before saving fixtures. Check room and roster updates, mute and unmute, opening the current room, and recovery after Discord closes or returns from the system tray.
+The tests in `src/discord-desktop.test.ts` run a stand-in Discord on a real pipe or Unix socket.
 
 ## Check changes
 
