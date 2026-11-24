@@ -3,8 +3,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { GlassButton } from './glass/glass-button'
 import ClickSpark, { type ClickSparkHandle } from './react-bits/click-spark'
 import Counter from './react-bits/counter'
-import DotGrid from './react-bits/dot-grid'
-import FloatingLines from './react-bits/floating-lines'
 import MicroSlats from './react-bits/micro-slats'
 import ShinyText from './react-bits/shiny-text'
 import StarBorder from './react-bits/star-border'
@@ -91,22 +89,14 @@ export function showStar(host: HTMLElement, on: boolean): void {
   )
 }
 
-export type Backdrop = 'dots' | 'lines' | 'slats'
-
 /** Fills `host` with the moving backdrop that the glass buttons bend. */
-export function mountBackdrop(host: HTMLElement, kind: Backdrop): void {
+export function mountBackdrop(host: HTMLElement): void {
   let root = roots.get(host)
   if (!root) {
     root = createRoot(host)
     roots.set(host, root)
   }
-  root.render(
-    kind === 'dots'
-      ? <DotGrid dotSize={5} gap={16} baseColor="#5b6bff" activeColor="#ffd166" proximity={90} clickShock={false} />
-      : kind === 'lines'
-        ? <FloatingLines interactive={false} intro={false} backgroundColor="transparent" />
-        : <MicroSlats color="#7a5cf5" backgroundColor="#12143a" interactive={false} intro={false} />
-  )
+  root.render(<MicroSlats color="#7a5cf5" backgroundColor="#12143a" interactive={false} intro={false} />)
 }
 
 const sparks = new WeakMap<HTMLElement, RefObject<ClickSparkHandle | null>>()
