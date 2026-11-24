@@ -4,6 +4,8 @@ See your Discord Desktop voice room, its participants, and your microphone state
 
 ## Install
 
+Thai guide from cloning the repository to everyday use: [docs/guide-th.md](docs/guide-th.md).
+
 1. Use Orca Desktop 1.4.266 or later on macOS or Windows, and install Discord Desktop.
 2. From this folder, run `orca plugin dev load . --json`. Review the trusted worker approval, then run the approval command Orca prints.
 3. Create a Discord application. See [Connect a Discord application](#connect-a-discord-application).
