@@ -17,7 +17,7 @@
 import { Button } from '@ui-sdk/react/button'
 import { Children, cloneElement, type ComponentProps, type ReactElement, type ReactNode } from 'react'
 
-import { GlassLayer, type GlassMaterial } from './glass-layer'
+import { GlassLayer, type GlassMaterial, type GlassOptics } from './glass-layer'
 
 export type GlassButtonSize = 'sm' | 'md' | 'lg' | 'xl'
 
@@ -33,6 +33,9 @@ export type GlassButtonProps = {
   tint?: number
   /** Clear glass: repaint what lies behind every frame, for a backdrop that moves. (Added here; the upstream button does not pass it on.) */
   live?: boolean
+  /** Clear glass: frost, and fine-tuning such as `tintColor`. (Added here; the upstream button does not pass them on.) */
+  blur?: number
+  optics?: GlassOptics
   /** Render the glass on the single child element (e.g. a router `<Link>`) instead of a `<button>`. */
   asChild?: boolean
   className?: string
@@ -61,6 +64,8 @@ export function GlassButton({
   iconPosition = 'end',
   tint,
   live,
+  blur,
+  optics,
   asChild = false,
   className = '',
   type = 'button',
@@ -74,7 +79,7 @@ export function GlassButton({
   // The glass layer must be the host's first child.
   const content = (label: ReactNode) => (
     <>
-      <GlassLayer material={material} tint={tint} live={live} />
+      <GlassLayer material={material} tint={tint} live={live} blur={blur} optics={optics} />
       {icon && iconPosition === 'start' && icon}
       {label}
       {icon && iconPosition === 'end' && icon}

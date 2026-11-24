@@ -17,23 +17,39 @@ export type GlassProps = {
   className?: string
   /** Clear glass: how much tint covers what lies behind (0 to 1). */
   tint?: number
+  /** Clear glass: colour of the tint, and how much it frosts what shows through. */
+  tintColor?: string
+  blur?: number
+  /** A round button with only this icon; the label becomes its accessible name. */
+  icon?: 'enter' | 'popout'
   disabled: boolean
   /** A returned promise keeps the button pending until it settles. */
   onPress: () => unknown
 }
 
+const ICONS = {
+  enter: <><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="m10 17 5-5-5-5" /><path d="M15 12H3" /></>,
+  popout: <><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>
+}
+
 const roots = new WeakMap<HTMLElement, Root>()
 
 /** Draws a glass button into `host`; call again with new props to update it in place. */
-export function mountGlass(host: HTMLElement, { label, material, className, tint, disabled, onPress }: GlassProps): void {
+export function mountGlass(host: HTMLElement, { label, material, className, tint, tintColor, blur, icon, disabled, onPress }: GlassProps): void {
   let root = roots.get(host)
   if (!root) {
     root = createRoot(host)
     roots.set(host, root)
   }
+  const round = icon ? '!size-10 !px-0 ' : ''
   root.render(
-    <GlassButton material={material} size="md" tint={tint} live className={className} disabled={disabled} onClick={onPress}>
-      {label}
+    <GlassButton
+      material={material} size="md" tint={tint} blur={blur} live
+      optics={tintColor ? { tintColor, saturation: 1.25 } : undefined}
+      className={`${round}${className ?? ''}`} disabled={disabled} onClick={onPress}
+      aria-label={icon ? label : undefined}
+    >
+      {icon ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="!size-[18px]">{ICONS[icon]}</svg> : label}
     </GlassButton>
   )
 }
@@ -90,7 +106,7 @@ export function mountBackdrop(host: HTMLElement, kind: Backdrop): void {
       ? <DotGrid dotSize={5} gap={16} baseColor="#5b6bff" activeColor="#ffd166" proximity={90} clickShock={false} />
       : kind === 'lines'
         ? <FloatingLines interactive={false} intro={false} backgroundColor="transparent" />
-        : <MicroSlats color="#6d7cff" backgroundColor="#0b1030" interactive={false} intro={false} />
+        : <MicroSlats color="#7a5cf5" backgroundColor="#12143a" interactive={false} intro={false} />
   )
 }
 

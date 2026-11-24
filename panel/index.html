@@ -82,23 +82,25 @@
       .btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, #7d8bff, #aa7eff); }
       .btn.danger { color: #fff; border-color: transparent; background: linear-gradient(135deg, #f0616d, #d9486f); }
       .btn.ghost { background: transparent; box-shadow: none; }
-      .actions { position: relative; display: flex; flex-wrap: wrap; gap: 10px; }
-      .stage { position: relative; isolation: isolate; padding: 14px 12px; border-radius: 14px; overflow: hidden; background: #0b1030; }
+      .actions { position: relative; display: flex; align-items: center; gap: 10px; }
+      /* One card: the moving backdrop fills it, the text and the buttons sit on top. */
+      .head.stage {
+        position: relative; isolation: isolate; overflow: hidden; background: #12143a; border-color: rgba(255, 255, 255, 0.14);
+        --orca-foreground: #fff; --orca-muted-foreground: rgba(255, 255, 255, 0.74); --orca-accent-foreground: #fff;
+        color: #fff;
+      }
+      /* Coloured circles are plain CSS, so the glass can bend them (it cannot read the backdrop's canvas as well). */
       .stage-art {
         position: absolute; inset: 0; z-index: -1;
         background:
-          radial-gradient(circle at 14% 30%, #ff6b9d 0 22px, transparent 23px),
-          radial-gradient(circle at 62% 22%, #ffd166 0 18px, transparent 19px),
-          radial-gradient(circle at 40% 80%, #3ddc97 0 24px, transparent 25px),
-          radial-gradient(circle at 90% 68%, #6d7cff 0 20px, transparent 21px),
-          repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 11px);
+          linear-gradient(180deg, rgba(18, 20, 58, 0.78), transparent 62%),
+          radial-gradient(circle at 24% calc(100% - 34px), #ff6b9d 0 20px, transparent 21px),
+          radial-gradient(circle at 52% calc(100% - 30px), #ffd166 0 15px, transparent 16px),
+          radial-gradient(circle at 76% calc(100% - 38px), #6d7cff 0 17px, transparent 18px),
+          radial-gradient(circle at 91% calc(100% - 28px), #3ddc97 0 18px, transparent 19px);
       }
-      .stage.moving .stage-art { background:
-          radial-gradient(circle at 14% 30%, #ff6b9d 0 22px, transparent 23px),
-          radial-gradient(circle at 62% 22%, #ffd166 0 18px, transparent 19px),
-          radial-gradient(circle at 40% 80%, #3ddc97 0 24px, transparent 25px),
-          radial-gradient(circle at 90% 68%, #6d7cff 0 20px, transparent 21px); }
       .glass-host { display: inline-flex; }
+      .glass-host.grow { flex: 1; min-width: 0; display: flex; }
       .stage-bg, .stage-grain, .stage-spark { position: absolute; inset: 0; pointer-events: none; }
       .stage-bg { z-index: -1; }
       .stage-grain, .stage-spark { z-index: 2; }
@@ -268,15 +270,15 @@
       // Glass buttons are React islands. Each host stays in the page between redraws, so a button keeps its
       // own animation state while the rest of the panel is rebuilt around it.
       const glassHosts = new Map()
-      function glassButton(key, label, { material = 'clear', className = '', tint = 0.3, quiet = false, fallback = '', run }) {
+      function glassButton(key, label, { material = 'clear', className = '', tint = 0.3, tintColor, blur, icon, grow = false, quiet = false, fallback = '', run }) {
         const glass = typeof window !== 'undefined' && window.discordGlass
         if (!glass) return button(label, run, fallback)
         let host = glassHosts.get(key)
         if (!host) {
-          host = el('div', 'glass-host')
+          host = el('div', 'glass-host' + (grow ? ' grow' : ''))
           glassHosts.set(key, host)
         }
-        glass.mountGlass(host, { label, material, className, tint, disabled: pending, onPress: async () => {
+        glass.mountGlass(host, { label, material, className, tint, tintColor, blur, icon, disabled: pending, onPress: async () => {
           if (!(await run({ quiet }))) throw new Error(failure ?? 'That did not work.')
         } })
         return host
@@ -374,7 +376,11 @@
         const fix = state.kind === 'unavailable' ? state.fix : null
         const parts = []
 
-        const head = el('section', 'glass head')
+        const head = el('section', 'glass head stage')
+        const layers = stageLayers()
+        // The coloured circles sit above the backdrop's canvas.
+        if (layers) head.append(layers.bg)
+        head.append(el('div', 'stage-art'))
         const title = el('div', 'title')
         title.append(el('h1', '', connected ? state.room : 'Discord'))
         if (connected) {
@@ -412,33 +418,24 @@
         const actions = el('div', 'actions')
         if (microphone) {
           const muted = microphone === 'muted'
+          // Clear glass tinted red (muted) or green (live): see-through, with the colour left on it.
           actions.append(glassButton('mic', muted ? 'Unmute mic' : 'Mute mic', {
-            material: 'tinted', className: muted ? 'border border-solid border-white/40 bg-[#6d7cff] text-white' : 'border border-solid border-white/40 bg-[#e0475c] text-white',
-            quiet: true, fallback: muted ? 'primary' : 'danger',
+            material: 'clear', tint: 0.5, blur: 4, tintColor: muted ? '#e0475c' : '#2fbf74', grow: true,
+            className: 'w-full !text-white', quiet: true, fallback: muted ? 'danger' : 'primary',
             run: ({ quiet }) => { sparkAt('mic'); return act({ kind: 'microphone', muted: !muted }, { quiet }) }
           }))
         }
         if (fix === 'authorize') actions.append(button('Authorize in Discord', () => act({ kind: 'authorize' }), 'primary'))
         if (microphone || fix === 'open') {
           actions.append(glassButton('open', connected ? 'Switch to voice room' : 'Open Discord', {
-            fallback: 'ghost', run: ({ quiet }) => act({ kind: 'open' }, { quiet })
+            icon: 'enter', fallback: 'ghost', run: ({ quiet }) => act({ kind: 'open' }, { quiet })
           }))
         }
         if (connected) {
-          actions.append(glassButton('pop', 'Pop out call', { fallback: 'ghost', run: ({ quiet }) => act({ kind: 'pop-out' }, { quiet }) }))
+          actions.append(glassButton('pop', 'Pop out call', { icon: 'popout', fallback: 'ghost', run: ({ quiet }) => act({ kind: 'pop-out' }, { quiet }) }))
         }
-        if (actions.children.length) {
-          // Clear glass bends what lies behind it, so the buttons sit on colour and fine lines. They are real
-          // elements: the glass paints the page's backgrounds and gradients, but not pseudo-elements.
-          const stage = el('div', 'stage')
-          // The moving backdrop is a canvas, which the glass cannot bend, so the coloured circles (plain CSS) sit
-          // above it and give the buttons something to refract.
-          const layers = stageLayers()
-          if (layers) { stage.classList.add('moving'); stage.append(layers.bg) }
-          stage.append(el('div', 'stage-art'), actions)
-          if (layers) stage.append(layers.grain, layers.spark)
-          head.append(stage)
-        }
+        if (actions.children.length) head.append(actions)
+        if (layers) head.append(layers.grain, layers.spark)
         parts.push(head)
 
         if (failure) parts.push(el('p', 'error', failure))

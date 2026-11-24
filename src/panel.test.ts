@@ -133,15 +133,17 @@ test('asks for the application ID and secret when setup is needed', async () => 
   assert.equal(actions[0]?.kind, 'setup')
 })
 
-test('gives the tinted microphone button a solid border so the glass can draw it', async () => {
-  // The glass reads a host with any border style other than solid or none as unpaintable and falls back to
-  // plain CSS. Without Tailwind's preflight a <button> is `outset`, so the class must say `solid`.
-  const { glass } = await load({ kind: 'idle', microphone: 'muted' })
-  const mic = glass.find(props => props.label === 'Unmute mic')
+test('draws the microphone as wide clear glass that keeps its red, and the rest as round icons', async () => {
+  const muted = await load({ kind: 'connected', room: 'Planning', microphone: 'muted', participants: [] })
+  const mic = muted.glass.find(props => props.label === 'Unmute mic')
   assert.ok(mic)
-  assert.equal(mic.material, 'tinted')
-  assert.match(String(mic.className), /\bborder-solid\b/)
-  assert.deepEqual(glass.map(props => props.label), ['Unmute mic', 'Open Discord'])
+  assert.equal(mic.material, 'clear')
+  assert.equal(mic.tintColor, '#e0475c')
+  assert.deepEqual(muted.glass.filter(props => props.icon).map(props => [props.label, props.icon]),
+    [['Switch to voice room', 'enter'], ['Pop out call', 'popout']])
+  const live = await load({ kind: 'idle', microphone: 'unmuted' })
+  assert.equal(live.glass.find(props => props.label === 'Mute mic')?.tintColor, '#2fbf74')
+  assert.deepEqual(live.glass.map(props => props.label), ['Mute mic', 'Open Discord'])
 })
 
 test('puts the star on whoever is speaking and rolls the head count', async () => {
