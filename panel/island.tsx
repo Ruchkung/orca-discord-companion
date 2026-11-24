@@ -5,6 +5,7 @@ import ClickSpark, { type ClickSparkHandle } from './react-bits/click-spark'
 import Counter from './react-bits/counter'
 import DotGrid from './react-bits/dot-grid'
 import FloatingLines from './react-bits/floating-lines'
+import MicroSlats from './react-bits/micro-slats'
 import Noise from './react-bits/noise'
 import ShinyText from './react-bits/shiny-text'
 import StarBorder from './react-bits/star-border'
@@ -75,7 +76,7 @@ export function showStar(host: HTMLElement, on: boolean): void {
   )
 }
 
-export type Backdrop = 'dots' | 'lines'
+export type Backdrop = 'dots' | 'lines' | 'slats'
 
 /** Fills `host` with the moving backdrop that the glass buttons bend. */
 export function mountBackdrop(host: HTMLElement, kind: Backdrop): void {
@@ -87,7 +88,9 @@ export function mountBackdrop(host: HTMLElement, kind: Backdrop): void {
   root.render(
     kind === 'dots'
       ? <DotGrid dotSize={5} gap={16} baseColor="#5b6bff" activeColor="#ffd166" proximity={90} clickShock={false} />
-      : <FloatingLines interactive={false} intro={false} backgroundColor="transparent" />
+      : kind === 'lines'
+        ? <FloatingLines interactive={false} intro={false} backgroundColor="transparent" />
+        : <MicroSlats color="#6d7cff" backgroundColor="#0b1030" interactive={false} intro={false} />
   )
 }
 
