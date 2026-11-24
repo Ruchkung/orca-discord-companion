@@ -1,0 +1,352 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --speaking: #3ddc84;
+        --muted-red: #f0616d;
+        --glass: color-mix(in srgb, var(--orca-card, #fff) 55%, transparent);
+        --glass-border: color-mix(in srgb, var(--orca-foreground, #000) 14%, transparent);
+        --glass-shine: color-mix(in srgb, #fff 28%, transparent);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        position: relative;
+        overflow-x: hidden;
+        padding: 14px 12px 18px;
+        font: 13px/1.4 var(--orca-font-sans, system-ui, sans-serif);
+        color: var(--orca-foreground);
+        background: var(--orca-background);
+      }
+      /* Soft colour behind the glass, so the blur has something to show. */
+      body::before, body::after {
+        content: '';
+        position: fixed;
+        z-index: 0;
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        filter: blur(48px);
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      body::before { top: -60px; left: -70px; background: radial-gradient(circle, #6d7cff, transparent 70%); }
+      body::after { bottom: -80px; right: -80px; background: radial-gradient(circle, #c26dff, transparent 70%); }
+      #app { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 12px; }
+
+      .glass {
+        background: var(--glass);
+        -webkit-backdrop-filter: blur(16px) saturate(1.5);
+        backdrop-filter: blur(16px) saturate(1.5);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        box-shadow: inset 0 1px 0 var(--glass-shine), 0 6px 18px rgba(0, 0, 0, 0.12);
+      }
+      .head { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+      .title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .title h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+      .pill {
+        flex: none;
+        padding: 2px 9px;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 999px;
+        color: var(--orca-accent-foreground, inherit);
+        background: color-mix(in srgb, #6d7cff 28%, transparent);
+        border: 1px solid color-mix(in srgb, #6d7cff 45%, transparent);
+      }
+      .hint { margin: 0; color: var(--orca-muted-foreground); }
+
+      button, input { font: inherit; color: inherit; }
+      .btn {
+        appearance: none;
+        cursor: pointer;
+        padding: 8px 14px;
+        font-weight: 600;
+        border-radius: 999px;
+        border: 1px solid var(--glass-border);
+        background: color-mix(in srgb, var(--orca-foreground) 7%, transparent);
+        box-shadow: inset 0 1px 0 var(--glass-shine);
+        transition: background 0.15s, transform 0.1s;
+      }
+      .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--orca-foreground) 13%, transparent); }
+      .btn:active:not(:disabled) { transform: scale(0.97); }
+      .btn:disabled { opacity: 0.5; cursor: default; }
+      .btn:focus-visible, input:focus-visible { outline: 2px solid var(--orca-ring, #6d7cff); outline-offset: 2px; }
+      .btn.primary { color: #fff; border-color: transparent; background: linear-gradient(135deg, #6d7cff, #9b6dff); }
+      .btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, #7d8bff, #aa7eff); }
+      .btn.danger { color: #fff; border-color: transparent; background: linear-gradient(135deg, #f0616d, #d9486f); }
+      .btn.ghost { background: transparent; box-shadow: none; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+      .mic { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--orca-muted-foreground); }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--speaking); }
+      .mic.off .dot { background: var(--muted-red); }
+
+      .roster { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+      .person {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 8px;
+        border-radius: 12px;
+        transition: background 0.2s;
+      }
+      .person.speaking { background: color-mix(in srgb, var(--speaking) 14%, transparent); }
+      .avatar {
+        position: relative;
+        flex: none;
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        font-weight: 700;
+        font-size: 14px;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      }
+      .person.speaking .avatar { animation: pulse 1.3s ease-out infinite; }
+      .person.muted .avatar { filter: saturate(0.5); opacity: 0.75; }
+      @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--speaking) 70%, transparent), 0 0 0 2px var(--speaking); }
+        100% { box-shadow: 0 0 0 11px transparent, 0 0 0 2px var(--speaking); }
+      }
+      .badge {
+        position: absolute;
+        right: -3px;
+        bottom: -3px;
+        width: 17px;
+        height: 17px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--muted-red);
+        border: 2px solid var(--orca-background);
+      }
+      .badge svg { width: 9px; height: 9px; }
+      .who { min-width: 0; display: flex; flex-direction: column; }
+      .who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .who span { font-size: 11px; color: var(--orca-muted-foreground); }
+      .person.speaking .who span { color: var(--speaking); font-weight: 600; }
+
+      form.glass { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+      label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--orca-muted-foreground); }
+      input {
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--glass-border);
+        background: color-mix(in srgb, var(--orca-background) 60%, transparent);
+      }
+      .error { margin: 0; padding: 8px 10px; border-radius: 10px; color: var(--muted-red); background: color-mix(in srgb, var(--muted-red) 12%, transparent); }
+      .demo { align-self: center; font-size: 11px; opacity: 0.7; }
+      a { color: inherit; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .person.speaking .avatar { animation: none; box-shadow: 0 0 0 2px var(--speaking); }
+        .btn, .person { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app" aria-live="polite"></main>
+    <script>
+      const app = document.getElementById('app')
+      const form = { clientId: '', clientSecret: '' }
+      let state = { kind: 'starting' }
+      let pending = false
+      let failure = null
+      let demoStep = -1
+
+      const demoStates = [
+        {
+          kind: 'connected', room: 'Planning', microphone: 'unmuted',
+          participants: [
+            { name: 'Ada Lovelace', muted: false, speaking: true },
+            { name: 'Lin', muted: false, speaking: false },
+            { name: 'Grace Hopper', muted: true, speaking: false },
+            { name: 'ธนากร', muted: false, speaking: false }
+          ]
+        },
+        {
+          kind: 'connected', room: 'Planning', microphone: 'muted',
+          participants: [
+            { name: 'Ada Lovelace', muted: false, speaking: false },
+            { name: 'Lin', muted: false, speaking: true },
+            { name: 'Grace Hopper', muted: true, speaking: false },
+            { name: 'ธนากร', muted: true, speaking: false }
+          ]
+        },
+        { kind: 'idle', microphone: 'muted' },
+        { kind: 'unavailable', reason: 'Connect your Discord application to show your voice room.', fix: 'setup' },
+        { kind: 'unavailable', reason: 'Authorize Orca in Discord to show your voice room.', fix: 'authorize' },
+        { kind: 'unavailable', reason: 'Discord is not running.', fix: 'open' }
+      ]
+
+      function el(tag, className, text) {
+        const node = document.createElement(tag)
+        if (className) node.className = className
+        if (text !== undefined) node.textContent = text
+        return node
+      }
+
+      const micOff = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16"/><path d="M9 9v3a3 3 0 0 0 5 2M15 10V6a3 3 0 0 0-5.5-1.5"/></svg>'
+
+      function hue(name) {
+        let h = 0
+        for (const ch of name) h = (h * 31 + ch.codePointAt(0)) % 360
+        return h
+      }
+
+      function initials(name) {
+        const letters = name.split(/\s+/).map(word => word.match(/[\p{L}\p{N}]/u)?.[0]).filter(Boolean)
+        return (letters.length > 1 ? letters[0] + letters[1] : letters[0] ?? '?').toUpperCase()
+      }
+
+      async function act(action) {
+        if (demoStep >= 0) return
+        if (pending) return
+        pending = true
+        failure = null
+        render()
+        try {
+          const result = await orca.plugin.request('discord.action', action)
+          state = result.state
+          failure = result.error
+          if (action.kind === 'setup' && !result.error) form.clientSecret = ''
+        } catch {
+          failure = 'Orca could not reach the Discord worker.'
+        } finally {
+          pending = false
+          render()
+        }
+      }
+
+      function button(label, action, className) {
+        const node = el('button', 'btn' + (className ? ' ' + className : ''), label)
+        node.type = 'button'
+        node.disabled = pending
+        node.addEventListener('click', action)
+        return node
+      }
+
+      function person({ name, muted, speaking }) {
+        const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : ''))
+        const avatar = el('div', 'avatar', initials(name))
+        const h = hue(name)
+        avatar.style.background = `linear-gradient(135deg, hsl(${h} 70% 58%), hsl(${(h + 40) % 360} 70% 45%))`
+        avatar.setAttribute('aria-hidden', 'true')
+        if (muted) {
+          const badge = el('span', 'badge')
+          badge.innerHTML = micOff
+          avatar.append(badge)
+        }
+        const who = el('div', 'who')
+        who.append(el('b', '', name))
+        if (muted || speaking) who.append(el('span', '', muted ? 'Muted' : 'Speaking'))
+        row.append(avatar, who)
+        return row
+      }
+
+      function setupForm() {
+        const node = el('form', 'glass')
+        const field = (label, key, type) => {
+          const wrap = el('label', '', label)
+          const input = el('input')
+          input.type = type
+          input.value = form[key]
+          input.autocomplete = 'off'
+          input.addEventListener('input', () => { form[key] = input.value })
+          wrap.append(input)
+          return wrap
+        }
+        const help = el('p', 'hint')
+        help.append('Create an application in the ')
+        const link = el('a', '', 'Discord Developer Portal')
+        link.href = 'https://discord.com/developers/applications'
+        link.target = '_blank'
+        link.rel = 'noreferrer'
+        help.append(link, ', then paste its Application ID and client secret.')
+        const connect = button('Connect to Discord', () => undefined, 'primary')
+        connect.type = 'submit'
+        node.append(help, field('Application ID', 'clientId', 'text'), field('Client secret', 'clientSecret', 'password'), connect)
+        node.addEventListener('submit', event => {
+          event.preventDefault()
+          void act({ kind: 'setup', clientId: form.clientId, clientSecret: form.clientSecret })
+        })
+        return node
+      }
+
+      function render() {
+        const connected = state.kind === 'connected'
+        const microphone = state.kind === 'idle' || connected ? state.microphone : null
+        const fix = state.kind === 'unavailable' ? state.fix : null
+        const parts = []
+
+        const head = el('section', 'glass head')
+        const title = el('div', 'title')
+        title.append(el('h1', '', connected ? state.room : 'Discord'))
+        if (connected) title.append(el('span', 'pill', state.participants.length + (state.participants.length === 1 ? ' person' : ' people')))
+        head.append(title)
+        if (state.kind === 'starting') head.append(el('p', 'hint', 'Connecting to Discord Desktop…'))
+        if (state.kind === 'unavailable') head.append(el('p', 'hint', state.reason))
+        if (state.kind === 'idle') head.append(el('p', 'hint', 'You’re not in a voice room.'))
+        if (microphone) {
+          const mic = el('div', 'mic' + (microphone === 'muted' ? ' off' : ''))
+          mic.append(el('span', 'dot'), document.createTextNode(microphone === 'muted' ? 'Microphone muted' : 'Microphone on'))
+          head.append(mic)
+        }
+        const actions = el('div', 'actions')
+        if (microphone) {
+          actions.append(button(microphone === 'muted' ? 'Unmute mic' : 'Mute mic',
+            () => act({ kind: 'microphone', muted: microphone === 'unmuted' }), microphone === 'muted' ? 'primary' : 'danger'))
+        }
+        if (fix === 'authorize') actions.append(button('Authorize in Discord', () => act({ kind: 'authorize' }), 'primary'))
+        if (microphone || fix === 'open') {
+          actions.append(button(connected ? 'Switch to voice room' : 'Open Discord', () => act({ kind: 'open' }), 'ghost'))
+        }
+        if (connected) actions.append(button('Pop out call', () => act({ kind: 'pop-out' }), 'ghost'))
+        if (actions.children.length) head.append(actions)
+        parts.push(head)
+
+        if (failure) parts.push(el('p', 'error', failure))
+        if (fix === 'setup') parts.push(setupForm())
+        if (connected && state.participants.length) {
+          const roster = el('ul', 'glass roster')
+          roster.setAttribute('aria-label', 'Voice participants')
+          for (const entry of state.participants) roster.append(person(entry))
+          parts.push(roster)
+        }
+
+        const demo = button(demoStep >= 0 ? 'Preview ' + (demoStep + 1) + '/' + demoStates.length + ' · next' : 'Preview styles', () => {
+          demoStep = (demoStep + 1) % demoStates.length
+          state = demoStates[demoStep]
+          failure = null
+          render()
+        }, 'ghost demo')
+        demo.disabled = false
+        parts.push(demo)
+        app.replaceChildren(...parts)
+      }
+
+      orca.plugin.on('discord.changed', next => {
+        if (demoStep >= 0) return
+        state = next
+        render()
+      })
+      orca.plugin.request('discord.state').then(next => {
+        if (demoStep >= 0) return
+        state = next
+        render()
+      }, () => {
+        state = { kind: 'unavailable', reason: 'Orca could not reach the Discord worker.', fix: null }
+        render()
+      })
+      render()
+    </script>
+  </body>
+</html>
