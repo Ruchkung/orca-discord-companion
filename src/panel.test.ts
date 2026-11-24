@@ -53,9 +53,11 @@ async function load(state: DiscordState, onAction: (action: DiscordAction) => Di
       on: (event: string, handler: (payload: unknown) => void) => { events[event] = handler }
     }
   }
-  runInNewContext(script, { document: page.document, orca, setTimeout, console })
+  const glass: Record<string, unknown>[] = []
+  const window = { discordGlass: { mountGlass: (_host: unknown, props: Record<string, unknown>) => { glass.push(props) } } }
+  runInNewContext(script, { document: page.document, orca, window, setTimeout, console })
   await new Promise(resolve => setTimeout(resolve, 0))
-  return { ...page, events }
+  return { ...page, events, glass }
 }
 
 test('shows the room, the roster, who is speaking and who is muted', async () => {
@@ -82,18 +84,18 @@ test('keeps the speaking state of someone who is muted off', async () => {
 
 test('sends the microphone action and follows the worker’s next state', async () => {
   const actions: DiscordAction[] = []
-  const { events, texts, flat, app } = await load({ kind: 'idle', microphone: 'muted' }, action => {
+  const { events, texts, glass } = await load({ kind: 'idle', microphone: 'muted' }, action => {
     actions.push(action)
     return { kind: 'idle', microphone: 'unmuted' }
   })
   assert.ok(texts().includes('Microphone muted'))
-  const unmute = flat(app).find(node => node.tag === 'button' && node.text === 'Unmute mic')
+  const unmute = glass.find(props => props.label === 'Unmute mic')
   assert.ok(unmute)
-  unmute.listeners.click?.[0]?.({})
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await (unmute.onPress as () => Promise<unknown>)()
   // The panel's script runs in its own realm, so compare plain JSON.
   assert.deepEqual(JSON.parse(JSON.stringify(actions)), [{ kind: 'microphone', muted: false }])
   assert.ok(texts().includes('Microphone on'))
+  assert.ok(glass.some(props => props.label === 'Mute mic'))
   events['discord.changed']?.({ kind: 'idle', microphone: 'muted' })
   assert.ok(texts().includes('Microphone muted'))
 })
@@ -112,4 +114,15 @@ test('asks for the application ID and secret when setup is needed', async () => 
   form.listeners.submit?.[0]?.({ preventDefault() {} })
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(actions[0]?.kind, 'setup')
+})
+
+test('gives the tinted microphone button a solid border so the glass can draw it', async () => {
+  // The glass reads a host with any border style other than solid or none as unpaintable and falls back to
+  // plain CSS. Without Tailwind's preflight a <button> is `outset`, so the class must say `solid`.
+  const { glass } = await load({ kind: 'idle', microphone: 'muted' })
+  const mic = glass.find(props => props.label === 'Unmute mic')
+  assert.ok(mic)
+  assert.equal(mic.material, 'tinted')
+  assert.match(String(mic.className), /\bborder-solid\b/)
+  assert.deepEqual(glass.map(props => props.label), ['Unmute mic', 'Open Discord'])
 })

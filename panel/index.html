@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="dist/island.css" />
     <style>
       :root {
         --speaking: #3ddc84;
@@ -60,7 +61,8 @@
       }
       .hint { margin: 0; color: var(--orca-muted-foreground); }
 
-      button, input { font: inherit; color: inherit; }
+      /* Scoped: the glass button's Tailwind utilities sit in a layer, so a bare `button` rule would beat them. */
+      .btn, input { font: inherit; color: inherit; }
       .btn {
         appearance: none;
         cursor: pointer;
@@ -80,7 +82,18 @@
       .btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, #7d8bff, #aa7eff); }
       .btn.danger { color: #fff; border-color: transparent; background: linear-gradient(135deg, #f0616d, #d9486f); }
       .btn.ghost { background: transparent; box-shadow: none; }
-      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .actions { position: relative; display: flex; flex-wrap: wrap; gap: 10px; }
+      .stage { position: relative; isolation: isolate; padding: 14px 12px; border-radius: 14px; overflow: hidden; background: #0b1030; }
+      .stage-art {
+        position: absolute; inset: 0; z-index: -1;
+        background:
+          radial-gradient(circle at 14% 30%, #ff6b9d 0 22px, transparent 23px),
+          radial-gradient(circle at 62% 22%, #ffd166 0 18px, transparent 19px),
+          radial-gradient(circle at 40% 80%, #3ddc97 0 24px, transparent 25px),
+          radial-gradient(circle at 90% 68%, #6d7cff 0 20px, transparent 21px),
+          repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 11px);
+      }
+      .glass-host { display: inline-flex; }
 
       .mic { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--orca-muted-foreground); }
       .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--speaking); }
@@ -154,6 +167,7 @@
   </head>
   <body>
     <main id="app" aria-live="polite"></main>
+    <script src="dist/island.js"></script>
     <script>
       const app = document.getElementById('app')
       const form = { clientId: '', clientSecret: '' }
@@ -207,12 +221,14 @@
         return (letters.length > 1 ? letters[0] + letters[1] : letters[0] ?? '?').toUpperCase()
       }
 
-      async function act(action) {
-        if (demoStep >= 0) return
-        if (pending) return
-        pending = true
+      async function act(action, { quiet = false } = {}) {
+        if (demoStep >= 0 || pending) return false
         failure = null
-        render()
+        // The glass button shows its own pending state, so a quiet action does not redraw the panel.
+        if (!quiet) {
+          pending = true
+          render()
+        }
         try {
           const result = await orca.plugin.request('discord.action', action)
           state = result.state
@@ -224,6 +240,7 @@
           pending = false
           render()
         }
+        return failure === null
       }
 
       function button(label, action, className) {
@@ -232,6 +249,23 @@
         node.disabled = pending
         node.addEventListener('click', action)
         return node
+      }
+
+      // Glass buttons are React islands. Each host stays in the page between redraws, so a button keeps its
+      // own animation state while the rest of the panel is rebuilt around it.
+      const glassHosts = new Map()
+      function glassButton(key, label, { material = 'clear', className = '', tint = 0.3, quiet = false, fallback = '', run }) {
+        const glass = typeof window !== 'undefined' && window.discordGlass
+        if (!glass) return button(label, run, fallback)
+        let host = glassHosts.get(key)
+        if (!host) {
+          host = el('div', 'glass-host')
+          glassHosts.set(key, host)
+        }
+        glass.mountGlass(host, { label, material, className, tint, disabled: pending, onPress: async () => {
+          if (!(await run({ quiet }))) throw new Error(failure ?? 'That did not work.')
+        } })
+        return host
       }
 
       function person({ name, muted, speaking }) {
@@ -302,15 +336,29 @@
         }
         const actions = el('div', 'actions')
         if (microphone) {
-          actions.append(button(microphone === 'muted' ? 'Unmute mic' : 'Mute mic',
-            () => act({ kind: 'microphone', muted: microphone === 'unmuted' }), microphone === 'muted' ? 'primary' : 'danger'))
+          const muted = microphone === 'muted'
+          actions.append(glassButton('mic', muted ? 'Unmute mic' : 'Mute mic', {
+            material: 'tinted', className: muted ? 'border border-solid border-white/40 bg-[#6d7cff] text-white' : 'border border-solid border-white/40 bg-[#e0475c] text-white',
+            quiet: true, fallback: muted ? 'primary' : 'danger',
+            run: ({ quiet }) => act({ kind: 'microphone', muted: !muted }, { quiet })
+          }))
         }
         if (fix === 'authorize') actions.append(button('Authorize in Discord', () => act({ kind: 'authorize' }), 'primary'))
         if (microphone || fix === 'open') {
-          actions.append(button(connected ? 'Switch to voice room' : 'Open Discord', () => act({ kind: 'open' }), 'ghost'))
+          actions.append(glassButton('open', connected ? 'Switch to voice room' : 'Open Discord', {
+            fallback: 'ghost', run: ({ quiet }) => act({ kind: 'open' }, { quiet })
+          }))
         }
-        if (connected) actions.append(button('Pop out call', () => act({ kind: 'pop-out' }), 'ghost'))
-        if (actions.children.length) head.append(actions)
+        if (connected) {
+          actions.append(glassButton('pop', 'Pop out call', { fallback: 'ghost', run: ({ quiet }) => act({ kind: 'pop-out' }, { quiet }) }))
+        }
+        if (actions.children.length) {
+          // Clear glass bends what lies behind it, so the buttons sit on colour and fine lines. They are real
+          // elements: the glass paints the page's backgrounds and gradients, but not pseudo-elements.
+          const stage = el('div', 'stage')
+          stage.append(el('div', 'stage-art'), actions)
+          head.append(stage)
+        }
         parts.push(head)
 
         if (failure) parts.push(el('p', 'error', failure))
@@ -347,6 +395,7 @@
         render()
       })
       render()
+
     </script>
   </body>
 </html>
