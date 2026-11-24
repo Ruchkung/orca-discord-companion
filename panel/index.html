@@ -287,13 +287,12 @@
       // Hosts live as long as a person is in the room, so the star's canvas is not rebuilt on every redraw.
       // These layers (and their canvases) live as long as the panel, and move into each new stage.
       let layerHosts = null
-      const BACKDROP = 'slats'
       function stageLayers() {
         const g = window.discordGlass
         if (!g?.mountBackdrop) return null
         if (!layerHosts) {
           layerHosts = { bg: el('div', 'stage-bg'), spark: el('div', 'stage-spark') }
-          g.mountBackdrop(layerHosts.bg, BACKDROP)
+          g.mountBackdrop(layerHosts.bg)
           g.mountSpark(layerHosts.spark)
         }
         return layerHosts
