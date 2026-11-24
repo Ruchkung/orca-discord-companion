@@ -255,7 +255,7 @@ function parseCredentials(stored: string | null): Credentials | null {
   }
 }
 
-function participantsOf(channel: unknown, self: string | null, microphone: Microphone) {
+function participantsOf(channel: unknown, self: string | null, microphone: Microphone, speaking: ReadonlySet<string>) {
   const states = get(channel, 'voice_states')
   return (Array.isArray(states) ? states : []).flatMap(entry => {
     const user = get(entry, 'user')
@@ -266,7 +266,8 @@ function participantsOf(channel: unknown, self: string | null, microphone: Micro
     const muted = get(user, 'id') === self
       ? microphone === 'muted'
       : ['mute', 'self_mute', 'deaf', 'self_deaf'].some(key => get(voice, key) === true)
-    return [{ name, muted }]
+    const id = text(get(user, 'id'))
+    return [{ name, muted, speaking: !muted && id !== null && speaking.has(id) }]
   })
 }
 
@@ -279,6 +280,9 @@ export function createDesktop(options: DesktopOptions): Desktop {
   const notify = () => { for (const listener of listeners) listener() }
   let rpc: RpcConnection | null = null
   let self: string | null = null
+  // Discord reports speaking per channel, so follow the one the caller is in and forget the rest.
+  let followed: string | null = null
+  let speaking = new Set<string>()
 
   async function credentials() {
     return parseCredentials(await vault.get(secretKey))
@@ -288,10 +292,28 @@ export function createDesktop(options: DesktopOptions): Desktop {
     await vault.set(secretKey, value ? JSON.stringify(value) : '')
   }
 
+  function forget() {
+    self = null
+    followed = null
+    speaking = new Set()
+  }
+
   function disconnect() {
     rpc?.close()
     rpc = null
-    self = null
+    forget()
+  }
+
+  async function follow(open: RpcConnection, channel: string | null) {
+    if (channel === followed) return
+    const previous = followed
+    followed = channel
+    speaking = new Set()
+    const change = (method: 'subscribe' | 'unsubscribe', id: string) => Promise.all(
+      ['SPEAKING_START', 'SPEAKING_STOP'].map(event => open[method](event, { channel_id: id }).catch(() => undefined))
+    )
+    if (previous) await change('unsubscribe', previous)
+    if (channel) await change('subscribe', channel)
   }
 
   async function pipes() {
@@ -300,8 +322,14 @@ export function createDesktop(options: DesktopOptions): Desktop {
 
   async function connection(stored: Credentials): Promise<RpcConnection> {
     if (rpc) return rpc
-    const opened = await connectRpc(await pipes(), stored.clientId, event => {
-      if (event === 'VOICE_SETTINGS_UPDATE' || event === 'VOICE_CHANNEL_SELECT') notify()
+    const opened = await connectRpc(await pipes(), stored.clientId, (event, data) => {
+      if (event === 'SPEAKING_START' || event === 'SPEAKING_STOP') {
+        const user = text(get(data, 'user_id'))
+        if (!user || text(get(data, 'channel_id')) !== followed) return
+        if (event === 'SPEAKING_START') speaking.add(user)
+        else speaking.delete(user)
+        notify()
+      } else if (event === 'VOICE_SETTINGS_UPDATE' || event === 'VOICE_CHANNEL_SELECT') notify()
     }).catch((error: unknown) => {
       if (error instanceof RpcError && error.code === 4000) {
         throw new Unavailable('Discord did not recognize the application ID. Enter it again.', 'setup')
@@ -313,7 +341,7 @@ export function createDesktop(options: DesktopOptions): Desktop {
     void opened.closed.then(() => {
       if (rpc !== opened) return
       rpc = null
-      self = null
+      forget()
       notify()
     })
     return opened
@@ -402,13 +430,15 @@ export function createDesktop(options: DesktopOptions): Desktop {
       // A request on a connection Discord just closed fails; reconnect once to learn whether Discord quit.
       for (let attempt = 0; ; attempt++) {
         try {
-          const { microphone, channel } = await voice(await session())
+          const open = await session()
+          const { microphone, channel } = await voice(open)
+          await follow(open, text(get(channel, 'id')))
           if (!channel) return { kind: 'idle', microphone }
           return {
             kind: 'connected',
             room: text(get(channel, 'name')) ?? 'Discord call',
             microphone,
-            participants: participantsOf(channel, self, microphone)
+            participants: participantsOf(channel, self, microphone, speaking)
           }
         } catch (error) {
           if (error instanceof Unavailable) return { kind: 'unavailable', reason: error.message, fix: error.fix }

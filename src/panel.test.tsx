@@ -5,7 +5,7 @@ import * as panel from './panel'
 test('shows the current room, sends explicit mic state, and updates when the call ends', async () => {
   let state: DiscordState & { kind: 'connected' } = {
     kind: 'connected', room: 'Planning', microphone: 'unmuted',
-    participants: [{ name: 'Ada', muted: false }, { name: 'Lin', muted: true }]
+    participants: [{ name: 'Ada', muted: false, speaking: false }, { name: 'Lin', muted: true, speaking: false }]
   }
   const actions: DiscordAction[] = []
   const host = mockHost({ requests: {

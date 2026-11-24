@@ -11,7 +11,7 @@ export type DiscordState =
       kind: 'connected'
       room: string
       microphone: Microphone
-      participants: { name: string; muted: boolean }[]
+      participants: { name: string; muted: boolean; speaking: boolean }[]
     }
 
 export type DiscordAction =

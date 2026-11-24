@@ -14,7 +14,8 @@ export class RpcError extends Error {
 
 export interface RpcConnection {
   request(cmd: string, args?: object, timeoutMs?: number): Promise<unknown>
-  subscribe(event: string): Promise<unknown>
+  subscribe(event: string, args?: object): Promise<unknown>
+  unsubscribe(event: string, args?: object): Promise<unknown>
   /** Resolves when Discord or the pipe closes the connection. */
   readonly closed: Promise<void>
   close(): void
@@ -132,6 +133,7 @@ export async function connectRpc(
     close: () => pipe.destroy(),
     request: (cmd, args = {}, timeoutMs = 5000) => send(cmd, args, timeoutMs),
     // Discord reads the event name beside the command, not inside its arguments.
-    subscribe: event => send('SUBSCRIBE', {}, 5000, event)
+    subscribe: (event, args = {}) => send('SUBSCRIBE', args, 5000, event),
+    unsubscribe: (event, args = {}) => send('UNSUBSCRIBE', args, 5000, event)
   }
 }

@@ -96,8 +96,8 @@ export default function Panel() {
       {failure && <Text tone="danger">{failure}</Text>}
       {connected && current.participants.length > 0 && (
         <List label="Voice participants">
-          {current.participants.map(({ name, muted }, index) => (
-            <ListItem key={index} title={name} description={muted ? 'Muted' : undefined} />
+          {current.participants.map(({ name, muted, speaking }, index) => (
+            <ListItem key={index} title={name} current={speaking} description={muted ? 'Muted' : speaking ? 'Speaking' : undefined} />
           ))}
         </List>
       )}

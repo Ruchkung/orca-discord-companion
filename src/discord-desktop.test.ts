@@ -62,9 +62,15 @@ async function fakeDiscord(options: { clientId?: string } = {}) {
           case 'SUBSCRIBE':
             if (typeof message.evt === 'string') {
               discord.subscribed.add(message.evt)
+              if (message.args.channel_id) discord.subscribed.add(message.evt + ':' + message.args.channel_id)
               reply({ evt: message.evt })
             }
             else fail(4004, 'Invalid event: undefined')
+            break
+          case 'UNSUBSCRIBE':
+            discord.subscribed.delete(message.evt)
+            discord.subscribed.delete(message.evt + ':' + message.args.channel_id)
+            reply({ evt: message.evt })
             break
           case 'GET_VOICE_SETTINGS': reply({ mute: discord.mute, deaf: false }); break
           case 'GET_SELECTED_VOICE_CHANNEL': reply(discord.channel); break
@@ -87,6 +93,12 @@ async function fakeDiscord(options: { clientId?: string } = {}) {
       discord.mute = mute
       if (!discord.subscribed.has('VOICE_SETTINGS_UPDATE')) return
       for (const socket of discord.sockets) send(socket, 1, { cmd: 'DISPATCH', evt: 'VOICE_SETTINGS_UPDATE', data: { mute } })
+    },
+    /** Reports someone starting or stopping speaking, as Discord does for a channel the client follows. */
+    speak(user: string, speaking: boolean, channel = '222') {
+      const evt = speaking ? 'SPEAKING_START' : 'SPEAKING_STOP'
+      if (!discord.subscribed.has(evt + ':' + channel)) return
+      for (const socket of discord.sockets) send(socket, 1, { cmd: 'DISPATCH', evt, data: { channel_id: channel, user_id: user } })
     },
     async quit() {
       for (const socket of discord.sockets) socket.destroy()
@@ -139,7 +151,7 @@ test('asks for setup, authorizes in Discord, and reads the room and roster', asy
     // Discord reports the caller's own voice state late, so the roster follows the live microphone setting.
     assert.deepEqual(await desktop.read(), {
       kind: 'connected', room: 'Planning', microphone: 'muted',
-      participants: [{ name: 'Ada', muted: true }, { name: 'Lin', muted: true }]
+      participants: [{ name: 'Ada', muted: true, speaking: false }, { name: 'Lin', muted: true, speaking: false }]
     })
     assert.match(vault.values['discord-rpc'] ?? '', /access-1/)
   } finally {
@@ -156,6 +168,40 @@ test('reports a mute pressed in Discord as soon as Discord sends it', async () =
     discord.pressMute(false)
     await changed
     assert.deepEqual(await desktop.read(), { kind: 'idle', microphone: 'unmuted' })
+  } finally {
+    await discord.quit()
+  }
+})
+
+test('shows who is speaking as Discord reports it, and follows the room the caller moves to', async () => {
+  const discord = await fakeDiscord()
+  const desktop = createDesktop({ platform: 'win32', vault: memoryVault({ 'discord-rpc': savedCredentials() }), pipes: async () => [discord.path] })
+  const roster = async () => {
+    const state = await desktop.read()
+    return state.kind === 'connected' ? state.participants.map(({ name, speaking }) => name + (speaking ? ' speaking' : '')) : []
+  }
+  const next = () => new Promise<void>(resolve => { const off = desktop.onChange(() => { off(); resolve() }) })
+  const talkative = { ...planning, voice_states: [
+    { user: { id: 'lin', global_name: 'Lin', username: 'lin' }, voice_state: { self_mute: false } }
+  ] }
+  try {
+    discord.mute = false
+    discord.channel = talkative
+    assert.deepEqual(await roster(), ['Lin'])
+    let changed = next()
+    discord.speak('lin', true)
+    await changed
+    assert.deepEqual(await roster(), ['Lin speaking'])
+    changed = next()
+    discord.speak('lin', false)
+    await changed
+    assert.deepEqual(await roster(), ['Lin'])
+
+    discord.speak('lin', true, '999')
+    discord.channel = { ...talkative, id: '333' }
+    assert.deepEqual(await roster(), ['Lin'])
+    assert.equal(discord.subscribed.has('SPEAKING_START:222'), false)
+    assert.equal(discord.subscribed.has('SPEAKING_START:333'), true)
   } finally {
     await discord.quit()
   }

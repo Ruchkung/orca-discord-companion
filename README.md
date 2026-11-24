@@ -26,7 +26,7 @@ Orca stores the ID, secret, and Discord access token in the plugin’s encrypted
 - **Mute mic** and **Unmute mic** change Discord’s microphone without bringing its window forward.
 - **Switch to voice room** shows Discord’s window, including from the system tray, and opens the current call with a `discord://` link.
 - **Pop out call** presses Discord’s **Pop Out** control in the call view through Orca’s accessibility integration. Open the call in Discord first. On macOS, enable Orca in **System Settings → Privacy & Security → Accessibility**. On Windows, Discord exposes the control only when it starts with `--force-renderer-accessibility`. **Open Discord** in the sidebar starts it that way.
-- Discord reports microphone and room changes as they happen. The sidebar also checks Discord every 2.5 seconds for roster changes.
+- Discord reports microphone, room, and speaking changes as they happen. The person speaking is highlighted and marked **Speaking**. The sidebar also checks Discord every 2.5 seconds for roster changes.
 
 ## When Discord is unavailable
 
