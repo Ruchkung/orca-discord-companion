@@ -6,7 +6,7 @@ import { start } from './worker'
 test('shows the active room in the status bar and clears it on disconnect', async () => {
   let state: DiscordState = {
     kind: 'connected', room: 'Planning', microphone: 'unmuted',
-    participants: [{ name: 'Ada', muted: false, speaking: false }]
+    participants: [{ id: 'ada', name: 'Ada', muted: false, speaking: false, self: false, volume: 100 }]
   }
   const connection: Desktop = {
     read: async () => state,

@@ -1,8 +1,9 @@
-import { createRef, type RefObject } from 'react'
+import { createRef, useEffect, useRef, useState, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { GlassButton } from './glass/glass-button'
 import ClickSpark, { type ClickSparkHandle } from './react-bits/click-spark'
 import Counter from './react-bits/counter'
+import ElasticSlider from './react-bits/elastic-slider'
 import MicroSlats from './react-bits/micro-slats'
 import ShinyText from './react-bits/shiny-text'
 import StarBorder from './react-bits/star-border'
@@ -125,7 +126,63 @@ export function mountShiny(host: HTMLElement, text: string): void {
   root.render(<ShinyText text={text} color="currentColor" shineColor="#ffffff" speed={2.4} />)
 }
 
-declare global {
-  interface Window { discordGlass?: { mountGlass: typeof mountGlass; mountCounter: typeof mountCounter; showStar: typeof showStar; mountBackdrop: typeof mountBackdrop; mountSpark: typeof mountSpark; spark: typeof spark; mountShiny: typeof mountShiny } }
+export type VolumeProps = {
+  /** Discord's level for this person, 0 to 200. */
+  value: number
+  /** The person's name, drawn inside the bar. */
+  name: string
+  /** Called when the person lets go of the slider. */
+  onCommit: (value: number) => void
 }
-window.discordGlass = { mountGlass, mountCounter, showStar, mountBackdrop, mountSpark, spark, mountShiny }
+
+// A poll that lands mid-drag (or just after) must not drag the slider back to the old level.
+const HOLD_MS = 4000
+
+/** A bar as tall as a roster row, with the name on the left and the level on the right, both inside it. */
+function VolumeSlider({ value, name, onCommit }: VolumeProps) {
+  const [shown, setShown] = useState(value)
+  const touched = useRef(0)
+  useEffect(() => {
+    if (Date.now() - touched.current > HOLD_MS) setShown(value)
+  }, [value])
+  return (
+    <ElasticSlider
+      className="!w-full"
+      value={shown}
+      maxValue={200}
+      isStepped
+      stepSize={5}
+      ticks={[100]}
+      thickness={38}
+      activeThickness={38}
+      growOnHover={false}
+      restOpacity={1}
+      radius={12}
+      iconPlacement="inside"
+      valuePosition="inside"
+      leftIcon={<span className="block max-w-[9.5em] truncate text-[13px] font-semibold">{name}</span>}
+      formatValue={next => `${next}%`}
+      contentColor="currentColor"
+      fillContentColor="#ffffff"
+      ariaLabel={`Volume for ${name}`}
+      rangeColor="#7a5cf5"
+      onChange={next => { touched.current = Date.now(); setShown(next) }}
+      onChangeEnd={next => { touched.current = Date.now(); onCommit(next) }}
+    />
+  )
+}
+
+/** Draws the per-person volume slider into `host`; call again to update it. */
+export function mountVolume(host: HTMLElement, props: VolumeProps): void {
+  let root = roots.get(host)
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  root.render(<VolumeSlider {...props} />)
+}
+
+declare global {
+  interface Window { discordGlass?: { mountGlass: typeof mountGlass; mountCounter: typeof mountCounter; showStar: typeof showStar; mountBackdrop: typeof mountBackdrop; mountSpark: typeof mountSpark; spark: typeof spark; mountShiny: typeof mountShiny; mountVolume: typeof mountVolume } }
+}
+window.discordGlass = { mountGlass, mountCounter, showStar, mountBackdrop, mountSpark, spark, mountShiny, mountVolume }

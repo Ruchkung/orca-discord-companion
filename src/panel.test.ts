@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { assert, test } from 'orca/testing'
-import type { DiscordAction, DiscordState } from './protocol'
+import type { DiscordAction, DiscordState, Participant } from './protocol'
+
+const who = (name: string, rest: Partial<Participant> = {}): Participant =>
+  ({ id: name.toLowerCase(), name, muted: false, speaking: false, self: false, volume: 100, ...rest })
 
 type Node = {
   tag: string
@@ -62,10 +65,12 @@ async function load(state: DiscordState, onAction: (action: DiscordAction) => Di
   const counts: number[] = []
   const layers: string[] = []
   const sparks: number[][] = []
+  const volumes: Record<string, unknown>[] = []
   const discordGlass: Record<string, unknown> = { mountGlass: (_host: unknown, props: Record<string, unknown>) => { glass.push(props) } }
   if (extras) {
     discordGlass.showStar = (_host: unknown, on: boolean) => { stars.push(on) }
     discordGlass.mountCounter = (_host: unknown, value: number) => { counts.push(value) }
+    discordGlass.mountVolume = (_host: unknown, props: Record<string, unknown>) => { volumes.push(props) }
     discordGlass.mountBackdrop = () => { layers.push('backdrop') }
     discordGlass.mountSpark = () => { layers.push('spark') }
     discordGlass.spark = (_host: unknown, x: number, y: number) => { sparks.push([x, y]) }
@@ -73,15 +78,15 @@ async function load(state: DiscordState, onAction: (action: DiscordAction) => Di
   const window = { discordGlass }
   runInNewContext(script, { document: page.document, orca, window, setTimeout, console })
   await new Promise(resolve => setTimeout(resolve, 0))
-  return { ...page, events, glass, stars, counts, layers, sparks }
+  return { ...page, events, glass, stars, counts, layers, sparks, volumes }
 }
 
 test('shows the room, the roster, who is speaking and who is muted', async () => {
   const { texts, flat, app } = await load({
     kind: 'connected', room: 'Planning', microphone: 'unmuted',
     participants: [
-      { name: 'Ada Lovelace', muted: false, speaking: true },
-      { name: 'Lin (ops)', muted: true, speaking: false }
+      who('Ada Lovelace', { speaking: true }),
+      who('Lin (ops)', { muted: true })
     ]
   })
   assert.deepEqual(texts().filter(text => ['Planning', '2 people', 'Ada Lovelace', 'AL', 'Speaking', 'Lin (ops)', 'LO', 'Muted'].includes(text)),
@@ -93,7 +98,7 @@ test('shows the room, the roster, who is speaking and who is muted', async () =>
 test('keeps the speaking state of someone who is muted off', async () => {
   const { flat, app } = await load({
     kind: 'connected', room: 'Planning', microphone: 'unmuted',
-    participants: [{ name: 'Ada', muted: true, speaking: true }]
+    participants: [who('Ada', { muted: true, speaking: true })]
   })
   assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking muted'])
 })
@@ -148,17 +153,17 @@ test('draws the microphone as wide clear glass that keeps its red, and the rest 
 test('puts the star on whoever is speaking and rolls the head count', async () => {
   const { stars, counts, events, flat, app } = await load({
     kind: 'connected', room: 'Planning', microphone: 'unmuted',
-    participants: [{ name: 'Ada', muted: false, speaking: true }, { name: 'Lin', muted: false, speaking: false }]
+    participants: [who('Ada', { speaking: true }), who('Lin')]
   }, undefined, true)
   assert.deepEqual(stars, [true, false])
   assert.deepEqual(counts, [2])
   // The first draw only learns who is here, so nobody slides in; a newcomer does.
-  assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking', 'person'])
+  assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking adjustable', 'person adjustable'])
   events['discord.changed']?.({
     kind: 'connected', room: 'Planning', microphone: 'unmuted',
-    participants: [{ name: 'Ada', muted: false, speaking: true }, { name: 'Lin', muted: false, speaking: false }, { name: 'Grace', muted: false, speaking: false }]
+    participants: [who('Ada', { speaking: true }), who('Lin'), { name: 'Grace', muted: false, speaking: false }]
   })
-  assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking', 'person', 'person enter'])
+  assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking adjustable', 'person adjustable', 'person enter adjustable'])
   assert.equal(counts.at(-1), 3)
 })
 
@@ -172,4 +177,32 @@ test('mounts the stage layers once and bursts sparks from the microphone button'
   // Redrawing keeps the same layers instead of building new canvases.
   events['discord.changed']?.({ kind: 'idle', microphone: 'unmuted' })
   assert.deepEqual(layers, ['backdrop', 'spark'])
+})
+
+test('opens a volume slider for anyone but yourself and sends the level when it is released', async () => {
+  const actions: DiscordAction[] = []
+  const room: DiscordState = {
+    kind: 'connected', room: 'Planning', microphone: 'unmuted',
+    participants: [who('Me', { self: true }), who('Lin', { volume: 70 })]
+  }
+  const { flat, app, volumes, texts } = await load(room, action => { actions.push(action); return room }, true)
+  const lines = flat(app).filter(node => node.className === 'line')
+  assert.equal(lines.length, 1)
+  assert.ok(texts().includes('70%'))
+  assert.equal(volumes.length, 0)
+  lines[0]?.listeners.click?.[0]?.({})
+  assert.equal(volumes.length, 1)
+  assert.equal(volumes[0]?.value, 70)
+  assert.equal(volumes[0]?.name, 'Lin')
+  await (volumes[0]?.onCommit as (value: number) => void)(150)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.deepEqual(JSON.parse(JSON.stringify(actions)), [{ kind: 'volume', user: 'lin', volume: 150 }])
+  // Clicking again closes it: the slider is not drawn into the next paint.
+  const again = flat(app).filter(node => node.className.startsWith('line'))
+  assert.equal(again[0]?.className, 'line solo')
+  again[0]?.listeners.click?.[0]?.({})
+  const mounted = volumes.length
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(volumes.length, mounted)
+  assert.equal(flat(app).filter(node => node.className === 'vol-host').length, 0)
 })
