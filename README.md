@@ -37,9 +37,9 @@ Orca stores the ID, secret, and Discord access token in the plugin’s encrypted
 
 ## Development
 
-The worker and panel share the state types in `src/protocol.ts`. `src/rpc.ts` speaks Discord’s IPC framing over the `discord-ipc-N` pipe. `src/discord-desktop.ts` holds authorization, voice state, and the macOS and Windows launch details. `src/accessibility.ts` finds the Pop Out control in Orca’s accessibility snapshot.
+The worker and `panel/index.html` share the state types in `src/protocol.ts`. The panel is plain HTML and CSS: frosted-glass cards, an initial avatar for each person, and a pulsing ring around whoever is speaking. `src/rpc.ts` speaks Discord’s IPC framing over the `discord-ipc-N` pipe. `src/discord-desktop.ts` holds authorization, voice state, and the macOS and Windows launch details. `src/accessibility.ts` finds the Pop Out control in Orca’s accessibility snapshot.
 
-The tests in `src/discord-desktop.test.ts` run a stand-in Discord on a real pipe or Unix socket.
+The tests in `src/discord-desktop.test.ts` run a stand-in Discord on a real pipe or Unix socket. `src/panel.test.ts` runs the panel’s script against a small fake DOM.
 
 ## Check changes
 

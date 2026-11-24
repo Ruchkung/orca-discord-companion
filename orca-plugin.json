@@ -15,8 +15,7 @@
   "main": "src/worker.ts",
   "contributes": {
     "panels": [
-      { "id": "discord", "title": "Discord", "icon": "activity", "entry": "src/panel.tsx", "ui": "components" },
-      { "id": "discord-glass", "title": "Discord (glass)", "icon": "activity", "entry": "panel/glass.html" }
+      { "id": "discord", "title": "Discord", "icon": "activity", "entry": "panel/index.html" }
     ],
     "commands": [
       { "id": "open-discord", "title": "Discord: Switch to Discord" }
