@@ -31,7 +31,7 @@ export function mountGlass(host: HTMLElement, { label, material, className, tint
     roots.set(host, root)
   }
   root.render(
-    <GlassButton material={material} size="md" tint={tint} className={className} disabled={disabled} onClick={onPress}>
+    <GlassButton material={material} size="md" tint={tint} live className={className} disabled={disabled} onClick={onPress}>
       {label}
     </GlassButton>
   )

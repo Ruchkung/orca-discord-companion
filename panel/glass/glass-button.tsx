@@ -31,6 +31,8 @@ export type GlassButtonProps = {
   iconPosition?: 'start' | 'end'
   /** Clear glass: how much tint covers the backdrop (0–1). */
   tint?: number
+  /** Clear glass: repaint what lies behind every frame, for a backdrop that moves. (Added here; the upstream button does not pass it on.) */
+  live?: boolean
   /** Render the glass on the single child element (e.g. a router `<Link>`) instead of a `<button>`. */
   asChild?: boolean
   className?: string
@@ -58,6 +60,7 @@ export function GlassButton({
   icon,
   iconPosition = 'end',
   tint,
+  live,
   asChild = false,
   className = '',
   type = 'button',
@@ -71,7 +74,7 @@ export function GlassButton({
   // The glass layer must be the host's first child.
   const content = (label: ReactNode) => (
     <>
-      <GlassLayer material={material} tint={tint} />
+      <GlassLayer material={material} tint={tint} live={live} />
       {icon && iconPosition === 'start' && icon}
       {label}
       {icon && iconPosition === 'end' && icon}
