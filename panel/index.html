@@ -94,6 +94,7 @@
           repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 11px);
       }
       .glass-host { display: inline-flex; }
+      .stage-orb { position: absolute; z-index: -1; right: 4px; top: 50%; width: 120px; height: 120px; transform: translateY(-50%); pointer-events: none; }
 
       .mic { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--orca-muted-foreground); }
       .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--speaking); }
@@ -142,10 +143,9 @@
         border: 2px solid var(--orca-background);
       }
       .badge svg { width: 9px; height: 9px; }
-      .who { min-width: 0; display: flex; flex-direction: column; }
+      .who { position: relative; min-width: 0; display: flex; flex-direction: column; }
       .who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .who span { font-size: 11px; color: var(--orca-muted-foreground); }
-      .person.speaking .who span { color: var(--speaking); font-weight: 600; }
+            .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
       form.glass { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
       label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--orca-muted-foreground); }
@@ -268,6 +268,15 @@
         return host
       }
 
+      let orbHost = null
+      // One persistent host, so the orb's WebGL context survives every redraw of the panel.
+      function orb(speaking) {
+        if (!window.discordGlass?.mountStrands) return document.createTextNode('')
+        orbHost ??= el('div', 'stage-orb')
+        window.discordGlass.mountStrands(orbHost, speaking ? 0.85 : 0.08)
+        return orbHost
+      }
+
       function person({ name, muted, speaking }) {
         const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : ''))
         const avatar = el('div', 'avatar', initials(name))
@@ -281,7 +290,8 @@
         }
         const who = el('div', 'who')
         who.append(el('b', '', name))
-        if (muted || speaking) who.append(el('span', '', muted ? 'Muted' : 'Speaking'))
+        // The avatar carries the state visually; this text is for screen readers and takes no room.
+        if (muted || speaking) who.append(el('span', 'sr', muted ? 'Muted' : 'Speaking'))
         row.append(avatar, who)
         return row
       }
@@ -356,7 +366,7 @@
           // Clear glass bends what lies behind it, so the buttons sit on colour and fine lines. They are real
           // elements: the glass paints the page's backgrounds and gradients, but not pseudo-elements.
           const stage = el('div', 'stage')
-          stage.append(el('div', 'stage-art'), actions)
+          stage.append(el('div', 'stage-art'), orb(connected && state.participants.some(p => p.speaking)), actions)
           head.append(stage)
         }
         parts.push(head)

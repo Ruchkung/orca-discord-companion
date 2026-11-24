@@ -3,3 +3,4 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @source "./glass";
 @source "./island.tsx";
+@source "./strands";

@@ -1,5 +1,6 @@
 import { createRoot, type Root } from 'react-dom/client'
 import { GlassButton } from './glass/glass-button'
+import Strands from './strands/strands'
 
 export type GlassProps = {
   label: string
@@ -29,7 +30,17 @@ export function mountGlass(host: HTMLElement, { label, material, className, tint
   )
 }
 
-declare global {
-  interface Window { discordGlass?: { mountGlass: typeof mountGlass } }
+/** Draws the Strands orb into `host`; `level` (0 to 1) is how loud the room is. */
+export function mountStrands(host: HTMLElement, level: number): void {
+  let root = roots.get(host)
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  root.render(<Strands level={level} energy={0.3} interactive={false} clickPulse={false} intro={false} glassSize={1.1} />)
 }
-window.discordGlass = { mountGlass }
+
+declare global {
+  interface Window { discordGlass?: { mountGlass: typeof mountGlass; mountStrands: typeof mountStrands } }
+}
+window.discordGlass = { mountGlass, mountStrands }
