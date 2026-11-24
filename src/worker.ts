@@ -23,6 +23,8 @@ function isDiscordAction(input: unknown): input is DiscordAction {
   if (typeof input !== 'object' || input === null || !('kind' in input)) return false
   return input.kind === 'open' || input.kind === 'pop-out' || input.kind === 'authorize' ||
     (input.kind === 'microphone' && 'muted' in input && typeof input.muted === 'boolean') ||
+    (input.kind === 'volume' && 'user' in input && typeof input.user === 'string' &&
+      'volume' in input && typeof input.volume === 'number' && Number.isFinite(input.volume)) ||
     (input.kind === 'setup' && 'clientId' in input && typeof input.clientId === 'string' &&
       'clientSecret' in input && typeof input.clientSecret === 'string')
 }

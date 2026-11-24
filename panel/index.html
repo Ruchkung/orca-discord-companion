@@ -113,6 +113,7 @@
       .roster { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
       .person {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 11px;
         padding: 8px;
@@ -120,6 +121,15 @@
         transition: background 0.2s;
       }
       .person { position: relative; }
+      .person.adjustable:hover { background: color-mix(in srgb, var(--orca-foreground) 5%, transparent); }
+      .line {
+        flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 0; border: 0;
+        background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 10px;
+      }
+      .line:focus-visible { outline: 2px solid var(--orca-ring, #6d7cff); outline-offset: 4px; }
+      .who { flex: 1; }
+      .level { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--orca-muted-foreground); }
+      .vol-host { flex-basis: 100%; padding: 6px 4px 2px 49px; cursor: default; }
       .person.enter { animation: enter 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.2); }
       @keyframes enter { from { opacity: 0; transform: translateY(-6px) scale(0.96); } }
       .counter-host { display: inline-flex; }
@@ -196,19 +206,19 @@
         {
           kind: 'connected', room: 'Planning', microphone: 'unmuted',
           participants: [
-            { name: 'Ada Lovelace', muted: false, speaking: true },
-            { name: 'Lin', muted: false, speaking: false },
-            { name: 'Grace Hopper', muted: true, speaking: false },
-            { name: 'ธนากร', muted: false, speaking: false }
+            { id: 'ada', name: 'Ada Lovelace', muted: false, speaking: true, self: true, volume: 100 },
+            { id: 'lin', name: 'Lin', muted: false, speaking: false, self: false, volume: 140 },
+            { id: 'grace', name: 'Grace Hopper', muted: true, speaking: false, self: false, volume: 70 },
+            { id: 'tha', name: 'ธนากร', muted: false, speaking: false, self: false, volume: 100 }
           ]
         },
         {
           kind: 'connected', room: 'Planning', microphone: 'muted',
           participants: [
-            { name: 'Ada Lovelace', muted: false, speaking: false },
-            { name: 'Lin', muted: false, speaking: true },
-            { name: 'Grace Hopper', muted: true, speaking: false },
-            { name: 'ธนากร', muted: true, speaking: false }
+            { id: 'ada', name: 'Ada Lovelace', muted: false, speaking: false, self: true, volume: 100 },
+            { id: 'lin', name: 'Lin', muted: false, speaking: true, self: false, volume: 140 },
+            { id: 'grace', name: 'Grace Hopper', muted: true, speaking: false, self: false, volume: 70 },
+            { id: 'tha', name: 'ธนากร', muted: true, speaking: false, self: false, volume: 100 }
           ]
         },
         { kind: 'idle', microphone: 'muted' },
@@ -318,8 +328,25 @@
         return host
       }
 
-      function person({ name, muted, speaking }) {
-        const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : '') + (known && !known.has(name) ? ' enter' : ''))
+      // Who has the volume slider open, by user id, and one persistent host per slider (like the glass buttons).
+      const opened = new Set()
+      const volumeHosts = new Map()
+      function volumeSlider(id, name, volume) {
+        const mount = window.discordGlass?.mountVolume
+        if (!mount) return null
+        let host = volumeHosts.get(id)
+        if (!host) { host = el('div', 'vol-host'); volumeHosts.set(id, host) }
+        mount(host, {
+          value: volume, label: 'Volume for ' + name,
+          onCommit: value => { act({ kind: 'volume', user: id, volume: value }, { quiet: true }) }
+        })
+        return host
+      }
+
+      function person({ id, name, muted, speaking, self, volume }) {
+        const adjustable = !self && id !== '' && !!window.discordGlass?.mountVolume
+        const open = adjustable && opened.has(id)
+        const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : '') + (known && !known.has(name) ? ' enter' : '') + (adjustable ? ' adjustable' : ''))
         const starHost = star(name, speaking)
         if (starHost) row.append(starHost)
         const avatar = el('div', 'avatar', initials(name))
@@ -335,7 +362,20 @@
         who.append(el('b', '', name))
         // The avatar carries the state visually; this text is for screen readers and takes no room.
         if (muted || speaking) who.append(el('span', 'sr', muted ? 'Muted' : 'Speaking'))
-        row.append(avatar, who)
+        if (!adjustable) {
+          row.append(avatar, who)
+          return row
+        }
+        // A real button holds the avatar and name, so the slider below it is not nested inside one.
+        const line = el('button', 'line')
+        line.type = 'button'
+        line.setAttribute('aria-expanded', String(open))
+        line.setAttribute('aria-label', name + ', volume ' + volume + '%')
+        line.addEventListener('click', () => { if (opened.has(id)) opened.delete(id); else opened.add(id); render() })
+        line.append(avatar, who)
+        row.append(line)
+        if (volume !== 100) row.append(el('span', 'level', volume + '%'))
+        if (open) row.append(volumeSlider(id, name, volume))
         return row
       }
 
@@ -446,6 +486,9 @@
           const names = new Set(state.participants.map(entry => entry.name))
           for (const [name, host] of starHosts) if (!names.has(name)) { window.discordGlass?.showStar(host, false); starHosts.delete(name) }
           known = names
+          const ids = new Set(state.participants.map(entry => entry.id))
+          for (const id of [...opened]) if (!ids.has(id)) opened.delete(id)
+          for (const id of [...volumeHosts.keys()]) if (!opened.has(id)) volumeHosts.delete(id)
           parts.push(roster)
         } else {
           known = null

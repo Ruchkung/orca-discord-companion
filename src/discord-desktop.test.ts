@@ -18,6 +18,8 @@ async function fakeDiscord(options: { clientId?: string } = {}) {
     channel: null as Channel,
     tokens: new Set(['access-1']),
     commands: [] as string[],
+    /** Per-person output volumes the caller set, by user id. */
+    volumes: {} as Record<string, number>,
     subscribed: new Set<string>(),
     /** Commands Discord receives but never answers. */
     stalled: new Set<string>(),
@@ -73,7 +75,19 @@ async function fakeDiscord(options: { clientId?: string } = {}) {
             reply({ evt: message.evt })
             break
           case 'GET_VOICE_SETTINGS': reply({ mute: discord.mute, deaf: false }); break
-          case 'GET_SELECTED_VOICE_CHANNEL': reply(discord.channel); break
+          case 'GET_SELECTED_VOICE_CHANNEL':
+            reply(discord.channel && {
+              ...discord.channel,
+              voice_states: discord.channel.voice_states.map(entry => {
+                const id = (entry as { user: { id: string } }).user.id
+                return id in discord.volumes ? { ...(entry as object), volume: discord.volumes[id] } : entry
+              })
+            })
+            break
+          case 'SET_USER_VOICE_SETTINGS':
+            discord.volumes[message.args.user_id] = message.args.volume
+            reply({ user_id: message.args.user_id, volume: message.args.volume, mute: false })
+            break
           case 'SET_VOICE_SETTINGS':
             discord.mute = message.args.mute
             reply({ mute: discord.mute })
@@ -151,7 +165,10 @@ test('asks for setup, authorizes in Discord, and reads the room and roster', asy
     // Discord reports the caller's own voice state late, so the roster follows the live microphone setting.
     assert.deepEqual(await desktop.read(), {
       kind: 'connected', room: 'Planning', microphone: 'muted',
-      participants: [{ name: 'Ada', muted: true, speaking: false }, { name: 'Lin', muted: true, speaking: false }]
+      participants: [
+        { id: 'me', name: 'Ada', muted: true, speaking: false, self: true, volume: 100 },
+        { id: 'lin', name: 'Lin', muted: true, speaking: false, self: false, volume: 100 }
+      ]
     })
     assert.match(vault.values['discord-rpc'] ?? '', /access-1/)
   } finally {
@@ -336,4 +353,26 @@ test('does not start anything on unsupported platforms', async () => {
     kind: 'unavailable', reason: 'Discord Companion requires macOS or Windows.', fix: null
   })
   await assert.rejects(desktop.act({ kind: 'open' }), /requires macOS or Windows/)
+})
+
+test('sets one person’s volume over RPC and reads it back, clamped to Discord’s range', async () => {
+  const discord = await fakeDiscord()
+  discord.channel = planning
+  const desktop = createDesktop({ platform: 'win32', vault: memoryVault({ 'discord-rpc': savedCredentials() }), pipes: async () => [discord.path] })
+  try {
+    const volumes = async () => {
+      const state = await desktop.read()
+      return state.kind === 'connected' ? state.participants.map(({ name, volume }) => name + ' ' + volume) : []
+    }
+    assert.deepEqual(await volumes(), ['Ada 100', 'Lin 100'])
+    await desktop.act({ kind: 'volume', user: 'lin', volume: 150.4 })
+    assert.deepEqual(await volumes(), ['Ada 100', 'Lin 150'])
+    await desktop.act({ kind: 'volume', user: 'lin', volume: 900 })
+    assert.deepEqual(await volumes(), ['Ada 100', 'Lin 200'])
+    await desktop.act({ kind: 'volume', user: 'lin', volume: -5 })
+    assert.deepEqual(await volumes(), ['Ada 100', 'Lin 0'])
+    await assert.rejects(desktop.act({ kind: 'volume', user: 'a b', volume: 50 }))
+  } finally {
+    await discord.quit()
+  }
 })

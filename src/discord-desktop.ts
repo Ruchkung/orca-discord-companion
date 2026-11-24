@@ -267,7 +267,9 @@ function participantsOf(channel: unknown, self: string | null, microphone: Micro
       ? microphone === 'muted'
       : ['mute', 'self_mute', 'deaf', 'self_deaf'].some(key => get(voice, key) === true)
     const id = text(get(user, 'id'))
-    return [{ name, muted, speaking: !muted && id !== null && speaking.has(id) }]
+    const level = get(entry, 'volume')
+    const volume = typeof level === 'number' && Number.isFinite(level) ? Math.min(200, Math.max(0, Math.round(level))) : 100
+    return [{ id: id ?? '', name, muted, speaking: !muted && id !== null && speaking.has(id), self: id !== null && id === self, volume }]
   })
 }
 
@@ -467,6 +469,15 @@ export function createDesktop(options: DesktopOptions): Desktop {
           const open = await session()
           const settings = await open.request('SET_VOICE_SETTINGS', { mute: action.muted })
           if (get(settings, 'mute') !== action.muted) throw new Error('Discord did not confirm the microphone change.')
+          notify()
+          return
+        }
+        case 'volume': {
+          if (!/^\w{1,32}$/.test(action.user)) throw new Error('Choose a person in the call.')
+          const volume = Math.min(200, Math.max(0, Math.round(action.volume)))
+          const open = await session()
+          const answer = await open.request('SET_USER_VOICE_SETTINGS', { user_id: action.user, volume })
+          if (get(answer, 'volume') !== volume) throw new Error('Discord did not confirm the volume change.')
           notify()
           return
         }
