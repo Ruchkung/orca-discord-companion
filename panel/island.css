@@ -1,0 +1,5 @@
+/* Utilities only: no preflight, so the panel's own styles stay untouched. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "./glass";
+@source "./island.tsx";
