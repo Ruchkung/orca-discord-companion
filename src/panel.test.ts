@@ -193,11 +193,13 @@ test('opens a volume slider for anyone but yourself and sends the level when it 
   lines[0]?.listeners.click?.[0]?.({})
   assert.equal(volumes.length, 1)
   assert.equal(volumes[0]?.value, 70)
+  assert.equal(volumes[0]?.name, 'Lin')
   await (volumes[0]?.onCommit as (value: number) => void)(150)
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.deepEqual(JSON.parse(JSON.stringify(actions)), [{ kind: 'volume', user: 'lin', volume: 150 }])
   // Clicking again closes it: the slider is not drawn into the next paint.
-  const again = flat(app).filter(node => node.className === 'line')
+  const again = flat(app).filter(node => node.className.startsWith('line'))
+  assert.equal(again[0]?.className, 'line solo')
   again[0]?.listeners.click?.[0]?.({})
   const mounted = volumes.length
   await new Promise(resolve => setTimeout(resolve, 0))

@@ -129,7 +129,8 @@
       .line:focus-visible { outline: 2px solid var(--orca-ring, #6d7cff); outline-offset: 4px; }
       .who { flex: 1; }
       .level { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--orca-muted-foreground); }
-      .vol-host { flex-basis: 100%; padding: 6px 4px 2px 49px; cursor: default; }
+      .line.solo { flex: none; }
+      .vol-host { flex: 1; min-width: 0; }
       .person.enter { animation: enter 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.2); }
       @keyframes enter { from { opacity: 0; transform: translateY(-6px) scale(0.96); } }
       .counter-host { display: inline-flex; }
@@ -319,6 +320,10 @@
       let shinyHost = null
       const starHosts = new Map()
       let known = null
+      // A press anywhere outside the open bar, or Escape, puts the row back.
+      function closeVolume() { if (opened.size) { opened.clear(); render() } }
+      document.addEventListener?.('pointerdown', event => { if (!event.target?.closest?.('.person.open')) closeVolume() })
+      document.addEventListener?.('keydown', event => { if (event.key === 'Escape') closeVolume() })
       function star(name, on) {
         const show = window.discordGlass?.showStar
         if (!show) return null
@@ -337,7 +342,7 @@
         let host = volumeHosts.get(id)
         if (!host) { host = el('div', 'vol-host'); volumeHosts.set(id, host) }
         mount(host, {
-          value: volume, label: 'Volume for ' + name,
+          value: volume, name,
           onCommit: value => { act({ kind: 'volume', user: id, volume: value }, { quiet: true }) }
         })
         return host
@@ -346,7 +351,7 @@
       function person({ id, name, muted, speaking, self, volume }) {
         const adjustable = !self && id !== '' && !!window.discordGlass?.mountVolume
         const open = adjustable && opened.has(id)
-        const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : '') + (known && !known.has(name) ? ' enter' : '') + (adjustable ? ' adjustable' : ''))
+        const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : '') + (known && !known.has(name) ? ' enter' : '') + (adjustable ? ' adjustable' : '') + (open ? ' open' : ''))
         const starHost = star(name, speaking)
         if (starHost) row.append(starHost)
         const avatar = el('div', 'avatar', initials(name))
@@ -366,16 +371,25 @@
           row.append(avatar, who)
           return row
         }
-        // A real button holds the avatar and name, so the slider below it is not nested inside one.
-        const line = el('button', 'line')
+        // A real button holds the avatar and name. Opened, the bar takes the name's place and the row keeps its height.
+        const line = el('button', open ? 'line solo' : 'line')
         line.type = 'button'
         line.setAttribute('aria-expanded', String(open))
         line.setAttribute('aria-label', name + ', volume ' + volume + '%')
-        line.addEventListener('click', () => { if (opened.has(id)) opened.delete(id); else opened.add(id); render() })
+        line.addEventListener('click', () => {
+          const wasOpen = opened.has(id)
+          opened.clear()
+          if (!wasOpen) opened.add(id)
+          render()
+        })
+        if (open) {
+          line.append(avatar)
+          row.append(line, volumeSlider(id, name, volume))
+          return row
+        }
         line.append(avatar, who)
         row.append(line)
         if (volume !== 100) row.append(el('span', 'level', volume + '%'))
-        if (open) row.append(volumeSlider(id, name, volume))
         return row
       }
 

@@ -129,7 +129,8 @@ export function mountShiny(host: HTMLElement, text: string): void {
 export type VolumeProps = {
   /** Discord's level for this person, 0 to 200. */
   value: number
-  label: string
+  /** The person's name, drawn inside the bar. */
+  name: string
   /** Called when the person lets go of the slider. */
   onCommit: (value: number) => void
 }
@@ -137,7 +138,8 @@ export type VolumeProps = {
 // A poll that lands mid-drag (or just after) must not drag the slider back to the old level.
 const HOLD_MS = 4000
 
-function VolumeSlider({ value, label, onCommit }: VolumeProps) {
+/** A bar as tall as a roster row, with the name on the left and the level on the right, both inside it. */
+function VolumeSlider({ value, name, onCommit }: VolumeProps) {
   const [shown, setShown] = useState(value)
   const touched = useRef(0)
   useEffect(() => {
@@ -151,8 +153,18 @@ function VolumeSlider({ value, label, onCommit }: VolumeProps) {
       isStepped
       stepSize={5}
       ticks={[100]}
-      valuePosition="none"
-      ariaLabel={label}
+      thickness={38}
+      activeThickness={38}
+      growOnHover={false}
+      restOpacity={1}
+      radius={12}
+      iconPlacement="inside"
+      valuePosition="inside"
+      leftIcon={<span className="block max-w-[9.5em] truncate text-[13px] font-semibold">{name}</span>}
+      formatValue={next => `${next}%`}
+      contentColor="currentColor"
+      fillContentColor="#ffffff"
+      ariaLabel={`Volume for ${name}`}
       rangeColor="#7a5cf5"
       onChange={next => { touched.current = Date.now(); setShown(next) }}
       onChangeEnd={next => { touched.current = Date.now(); onCommit(next) }}
