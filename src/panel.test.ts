@@ -41,7 +41,7 @@ function fakeDocument() {
   return { app, document, flat, texts: () => flat(app).map(node => node.text).filter(Boolean) }
 }
 
-async function load(state: DiscordState, onAction: (action: DiscordAction) => DiscordState = () => state) {
+async function load(state: DiscordState, onAction: (action: DiscordAction) => DiscordState = () => state, extras = false) {
   const page = fakeDocument()
   const html = readFileSync(new URL('../panel/index.html', import.meta.url), 'utf8')
   const script = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'))
@@ -54,10 +54,17 @@ async function load(state: DiscordState, onAction: (action: DiscordAction) => Di
     }
   }
   const glass: Record<string, unknown>[] = []
-  const window = { discordGlass: { mountGlass: (_host: unknown, props: Record<string, unknown>) => { glass.push(props) } } }
+  const stars: boolean[] = []
+  const counts: number[] = []
+  const discordGlass: Record<string, unknown> = { mountGlass: (_host: unknown, props: Record<string, unknown>) => { glass.push(props) } }
+  if (extras) {
+    discordGlass.showStar = (_host: unknown, on: boolean) => { stars.push(on) }
+    discordGlass.mountCounter = (_host: unknown, value: number) => { counts.push(value) }
+  }
+  const window = { discordGlass }
   runInNewContext(script, { document: page.document, orca, window, setTimeout, console })
   await new Promise(resolve => setTimeout(resolve, 0))
-  return { ...page, events, glass }
+  return { ...page, events, glass, stars, counts }
 }
 
 test('shows the room, the roster, who is speaking and who is muted', async () => {
@@ -125,4 +132,21 @@ test('gives the tinted microphone button a solid border so the glass can draw it
   assert.equal(mic.material, 'tinted')
   assert.match(String(mic.className), /\bborder-solid\b/)
   assert.deepEqual(glass.map(props => props.label), ['Unmute mic', 'Open Discord'])
+})
+
+test('puts the star on whoever is speaking and rolls the head count', async () => {
+  const { stars, counts, events, flat, app } = await load({
+    kind: 'connected', room: 'Planning', microphone: 'unmuted',
+    participants: [{ name: 'Ada', muted: false, speaking: true }, { name: 'Lin', muted: false, speaking: false }]
+  }, undefined, true)
+  assert.deepEqual(stars, [true, false])
+  assert.deepEqual(counts, [2])
+  // The first draw only learns who is here, so nobody slides in; a newcomer does.
+  assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking', 'person'])
+  events['discord.changed']?.({
+    kind: 'connected', room: 'Planning', microphone: 'unmuted',
+    participants: [{ name: 'Ada', muted: false, speaking: true }, { name: 'Lin', muted: false, speaking: false }, { name: 'Grace', muted: false, speaking: false }]
+  })
+  assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking', 'person', 'person enter'])
+  assert.equal(counts.at(-1), 3)
 })

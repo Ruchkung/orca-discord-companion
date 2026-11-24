@@ -108,7 +108,12 @@
         border-radius: 12px;
         transition: background 0.2s;
       }
-      .person.speaking { background: color-mix(in srgb, var(--speaking) 14%, transparent); }
+      .person { position: relative; }
+      .person.enter { animation: enter 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.2); }
+      @keyframes enter { from { opacity: 0; transform: translateY(-6px) scale(0.96); } }
+      .counter-host { display: inline-flex; }
+      .star-host { position: absolute; inset: 0; pointer-events: none; }
+      .person.speaking { background: color-mix(in srgb, var(--speaking) 8%, transparent); }
       .avatar {
         position: relative;
         flex: none;
@@ -161,6 +166,7 @@
       @media (prefers-reduced-motion: reduce) {
         .person.speaking .avatar { animation: none; box-shadow: 0 0 0 2px var(--speaking); }
         .btn, .person { transition: none; }
+        .person.enter { animation: none; }
       }
     </style>
   </head>
@@ -267,8 +273,23 @@
         return host
       }
 
+      // Hosts live as long as a person is in the room, so the star's canvas is not rebuilt on every redraw.
+      let counterHost = null
+      const starHosts = new Map()
+      let known = null
+      function star(name, on) {
+        const show = window.discordGlass?.showStar
+        if (!show) return null
+        let host = starHosts.get(name)
+        if (!host) { host = el('div', 'star-host'); starHosts.set(name, host) }
+        show(host, on)
+        return host
+      }
+
       function person({ name, muted, speaking }) {
-        const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : ''))
+        const row = el('li', 'person' + (speaking ? ' speaking' : '') + (muted ? ' muted' : '') + (known && !known.has(name) ? ' enter' : ''))
+        const starHost = star(name, speaking)
+        if (starHost) row.append(starHost)
         const avatar = el('div', 'avatar', initials(name))
         const h = hue(name)
         avatar.style.background = `linear-gradient(135deg, hsl(${h} 70% 58%), hsl(${(h + 40) % 360} 70% 45%))`
@@ -324,7 +345,21 @@
         const head = el('section', 'glass head')
         const title = el('div', 'title')
         title.append(el('h1', '', connected ? state.room : 'Discord'))
-        if (connected) title.append(el('span', 'pill', state.participants.length + (state.participants.length === 1 ? ' person' : ' people')))
+        if (connected) {
+          const count = state.participants.length
+          const label = count === 1 ? ' person' : ' people'
+          const pill = el('span', 'pill')
+          if (window.discordGlass?.mountCounter) {
+            // The rolling digits are drawn by the counter; the full phrase stays readable for screen readers.
+            counterHost ??= el('span', 'counter-host')
+            window.discordGlass.mountCounter(counterHost, count)
+            pill.setAttribute('aria-label', count + label)
+            pill.append(counterHost, document.createTextNode(label))
+          } else {
+            pill.append(document.createTextNode(count + label))
+          }
+          title.append(pill)
+        }
         head.append(title)
         if (state.kind === 'starting') head.append(el('p', 'hint', 'Connecting to Discord Desktop…'))
         if (state.kind === 'unavailable') head.append(el('p', 'hint', state.reason))
@@ -367,7 +402,15 @@
           const roster = el('ul', 'glass roster')
           roster.setAttribute('aria-label', 'Voice participants')
           for (const entry of state.participants) roster.append(person(entry))
+          // The first draw only learns who is here; after that, newcomers slide in.
+          const names = new Set(state.participants.map(entry => entry.name))
+          for (const [name, host] of starHosts) if (!names.has(name)) { window.discordGlass?.showStar(host, false); starHosts.delete(name) }
+          known = names
           parts.push(roster)
+        } else {
+          known = null
+          for (const host of starHosts.values()) window.discordGlass?.showStar(host, false)
+          starHosts.clear()
         }
 
         const demo = button(demoStep >= 0 ? 'Preview ' + (demoStep + 1) + '/' + demoStates.length + ' · next' : 'Preview styles', () => {

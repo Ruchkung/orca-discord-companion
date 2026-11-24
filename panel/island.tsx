@@ -1,5 +1,7 @@
 import { createRoot, type Root } from 'react-dom/client'
 import { GlassButton } from './glass/glass-button'
+import Counter from './react-bits/counter'
+import StarBorder from './react-bits/star-border'
 
 export type GlassProps = {
   label: string
@@ -29,7 +31,45 @@ export function mountGlass(host: HTMLElement, { label, material, className, tint
   )
 }
 
-declare global {
-  interface Window { discordGlass?: { mountGlass: typeof mountGlass } }
+/** Draws a number whose digits roll to each new value. */
+export function mountCounter(host: HTMLElement, value: number): void {
+  let root = roots.get(host)
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  root.render(<Counter value={value} intro={false} fontSize="1em" fontWeight="inherit" textColor="currentColor" />)
 }
-window.discordGlass = { mountGlass }
+
+/** Lays a star that circles the edge over a roster row (on) or removes it (off). */
+export function showStar(host: HTMLElement, on: boolean): void {
+  let root = roots.get(host)
+  if (!on) {
+    root?.render(null)
+    return
+  }
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  root.render(
+    <StarBorder
+      as="div"
+      className="pointer-events-none !absolute !inset-0 !p-0"
+      radius={12}
+      thickness={1.5}
+      color="#3ddc84"
+      trailColor="#3ddc84"
+      backgroundColor="transparent"
+      borderColor="transparent"
+      hover="none"
+      clickPulse={false}
+      duration={3}
+    />
+  )
+}
+
+declare global {
+  interface Window { discordGlass?: { mountGlass: typeof mountGlass; mountCounter: typeof mountCounter; showStar: typeof showStar } }
+}
+window.discordGlass = { mountGlass, mountCounter, showStar }
