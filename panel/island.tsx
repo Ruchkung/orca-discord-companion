@@ -6,7 +6,6 @@ import Counter from './react-bits/counter'
 import DotGrid from './react-bits/dot-grid'
 import FloatingLines from './react-bits/floating-lines'
 import MicroSlats from './react-bits/micro-slats'
-import Noise from './react-bits/noise'
 import ShinyText from './react-bits/shiny-text'
 import StarBorder from './react-bits/star-border'
 
@@ -110,16 +109,6 @@ export function mountBackdrop(host: HTMLElement, kind: Backdrop): void {
   )
 }
 
-/** A faint film grain over the stage. */
-export function mountNoise(host: HTMLElement): void {
-  let root = roots.get(host)
-  if (!root) {
-    root = createRoot(host)
-    roots.set(host, root)
-  }
-  root.render(<Noise opacity={0.06} fps={12} blendMode="overlay" />)
-}
-
 const sparks = new WeakMap<HTMLElement, RefObject<ClickSparkHandle | null>>()
 
 /** A layer that can burst sparks anywhere inside it. */
@@ -147,6 +136,6 @@ export function mountShiny(host: HTMLElement, text: string): void {
 }
 
 declare global {
-  interface Window { discordGlass?: { mountGlass: typeof mountGlass; mountCounter: typeof mountCounter; showStar: typeof showStar; mountBackdrop: typeof mountBackdrop; mountNoise: typeof mountNoise; mountSpark: typeof mountSpark; spark: typeof spark; mountShiny: typeof mountShiny } }
+  interface Window { discordGlass?: { mountGlass: typeof mountGlass; mountCounter: typeof mountCounter; showStar: typeof showStar; mountBackdrop: typeof mountBackdrop; mountSpark: typeof mountSpark; spark: typeof spark; mountShiny: typeof mountShiny } }
 }
-window.discordGlass = { mountGlass, mountCounter, showStar, mountBackdrop, mountNoise, mountSpark, spark, mountShiny }
+window.discordGlass = { mountGlass, mountCounter, showStar, mountBackdrop, mountSpark, spark, mountShiny }

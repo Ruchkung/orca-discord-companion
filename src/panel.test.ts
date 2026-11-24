@@ -67,7 +67,6 @@ async function load(state: DiscordState, onAction: (action: DiscordAction) => Di
     discordGlass.showStar = (_host: unknown, on: boolean) => { stars.push(on) }
     discordGlass.mountCounter = (_host: unknown, value: number) => { counts.push(value) }
     discordGlass.mountBackdrop = () => { layers.push('backdrop') }
-    discordGlass.mountNoise = () => { layers.push('noise') }
     discordGlass.mountSpark = () => { layers.push('spark') }
     discordGlass.spark = (_host: unknown, x: number, y: number) => { sparks.push([x, y]) }
   }
@@ -165,12 +164,12 @@ test('puts the star on whoever is speaking and rolls the head count', async () =
 
 test('mounts the stage layers once and bursts sparks from the microphone button', async () => {
   const { layers, sparks, glass, events } = await load({ kind: 'idle', microphone: 'muted' }, undefined, true)
-  assert.deepEqual(layers, ['backdrop', 'noise', 'spark'])
+  assert.deepEqual(layers, ['backdrop', 'spark'])
   const mic = glass.find(props => props.label === 'Unmute mic')
   assert.ok(mic)
   await (mic.onPress as () => Promise<unknown>)()
   assert.equal(sparks.length, 1)
   // Redrawing keeps the same layers instead of building new canvases.
   events['discord.changed']?.({ kind: 'idle', microphone: 'unmuted' })
-  assert.deepEqual(layers, ['backdrop', 'noise', 'spark'])
+  assert.deepEqual(layers, ['backdrop', 'spark'])
 })

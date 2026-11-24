@@ -101,9 +101,9 @@
       }
       .glass-host { display: inline-flex; }
       .glass-host.grow { flex: 1; min-width: 0; display: flex; }
-      .stage-bg, .stage-grain, .stage-spark { position: absolute; inset: 0; pointer-events: none; }
+      .stage-bg, .stage-spark { position: absolute; inset: 0; pointer-events: none; }
       .stage-bg { z-index: -1; }
-      .stage-grain, .stage-spark { z-index: 2; }
+      .stage-spark { z-index: 2; }
       .shiny-host { display: inline; }
 
       .mic { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--orca-muted-foreground); }
@@ -292,9 +292,8 @@
         const g = window.discordGlass
         if (!g?.mountBackdrop) return null
         if (!layerHosts) {
-          layerHosts = { bg: el('div', 'stage-bg'), grain: el('div', 'stage-grain'), spark: el('div', 'stage-spark') }
+          layerHosts = { bg: el('div', 'stage-bg'), spark: el('div', 'stage-spark') }
           g.mountBackdrop(layerHosts.bg, BACKDROP)
-          g.mountNoise(layerHosts.grain)
           g.mountSpark(layerHosts.spark)
         }
         return layerHosts
@@ -435,7 +434,7 @@
           actions.append(glassButton('pop', 'Pop out call', { icon: 'popout', fallback: 'ghost', run: ({ quiet }) => act({ kind: 'pop-out' }, { quiet }) }))
         }
         if (actions.children.length) head.append(actions)
-        if (layers) head.append(layers.grain, layers.spark)
+        if (layers) head.append(layers.spark)
         parts.push(head)
 
         if (failure) parts.push(el('p', 'error', failure))
