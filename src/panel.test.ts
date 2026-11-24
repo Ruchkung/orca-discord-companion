@@ -16,6 +16,8 @@ type Node = {
   replaceChildren(...items: Node[]): void
   addEventListener(type: string, handler: (event: unknown) => void): void
   setAttribute(name: string, value: string): void
+  classList: { add(name: string): void }
+  getBoundingClientRect(): { left: number; top: number; width: number; height: number }
 }
 
 /** Just enough DOM to run the panel's own script and read what it draws. */
@@ -26,7 +28,9 @@ function fakeDocument() {
       append(...items) { node.children.push(...items.map(item => typeof item === 'string' ? make('#text', item) : item)) },
       replaceChildren(...items) { node.children = items },
       addEventListener(type, handler) { (node.listeners[type] ??= []).push(handler) },
-      setAttribute(name, value) { node.attributes[name] = value }
+      setAttribute(name, value) { node.attributes[name] = value },
+      classList: { add(name) { node.className = node.className ? `${node.className} ${name}` : name } },
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 10 })
     }
     Object.defineProperty(node, 'textContent', { get: () => node.text, set: (value: string) => { node.text = value } })
     return node
@@ -56,15 +60,21 @@ async function load(state: DiscordState, onAction: (action: DiscordAction) => Di
   const glass: Record<string, unknown>[] = []
   const stars: boolean[] = []
   const counts: number[] = []
+  const layers: string[] = []
+  const sparks: number[][] = []
   const discordGlass: Record<string, unknown> = { mountGlass: (_host: unknown, props: Record<string, unknown>) => { glass.push(props) } }
   if (extras) {
     discordGlass.showStar = (_host: unknown, on: boolean) => { stars.push(on) }
     discordGlass.mountCounter = (_host: unknown, value: number) => { counts.push(value) }
+    discordGlass.mountBackdrop = () => { layers.push('backdrop') }
+    discordGlass.mountNoise = () => { layers.push('noise') }
+    discordGlass.mountSpark = () => { layers.push('spark') }
+    discordGlass.spark = (_host: unknown, x: number, y: number) => { sparks.push([x, y]) }
   }
   const window = { discordGlass }
   runInNewContext(script, { document: page.document, orca, window, setTimeout, console })
   await new Promise(resolve => setTimeout(resolve, 0))
-  return { ...page, events, glass, stars, counts }
+  return { ...page, events, glass, stars, counts, layers, sparks }
 }
 
 test('shows the room, the roster, who is speaking and who is muted', async () => {
@@ -149,4 +159,16 @@ test('puts the star on whoever is speaking and rolls the head count', async () =
   })
   assert.deepEqual(flat(app).filter(node => node.tag === 'li').map(node => node.className), ['person speaking', 'person', 'person enter'])
   assert.equal(counts.at(-1), 3)
+})
+
+test('mounts the stage layers once and bursts sparks from the microphone button', async () => {
+  const { layers, sparks, glass, events } = await load({ kind: 'idle', microphone: 'muted' }, undefined, true)
+  assert.deepEqual(layers, ['backdrop', 'noise', 'spark'])
+  const mic = glass.find(props => props.label === 'Unmute mic')
+  assert.ok(mic)
+  await (mic.onPress as () => Promise<unknown>)()
+  assert.equal(sparks.length, 1)
+  // Redrawing keeps the same layers instead of building new canvases.
+  events['discord.changed']?.({ kind: 'idle', microphone: 'unmuted' })
+  assert.deepEqual(layers, ['backdrop', 'noise', 'spark'])
 })

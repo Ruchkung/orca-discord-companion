@@ -93,7 +93,16 @@
           radial-gradient(circle at 90% 68%, #6d7cff 0 20px, transparent 21px),
           repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 11px);
       }
+      .stage.moving .stage-art { background:
+          radial-gradient(circle at 14% 30%, #ff6b9d 0 22px, transparent 23px),
+          radial-gradient(circle at 62% 22%, #ffd166 0 18px, transparent 19px),
+          radial-gradient(circle at 40% 80%, #3ddc97 0 24px, transparent 25px),
+          radial-gradient(circle at 90% 68%, #6d7cff 0 20px, transparent 21px); }
       .glass-host { display: inline-flex; }
+      .stage-bg, .stage-grain, .stage-spark { position: absolute; inset: 0; pointer-events: none; }
+      .stage-bg { z-index: -1; }
+      .stage-grain, .stage-spark { z-index: 2; }
+      .shiny-host { display: inline; }
 
       .mic { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--orca-muted-foreground); }
       .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--speaking); }
@@ -274,7 +283,30 @@
       }
 
       // Hosts live as long as a person is in the room, so the star's canvas is not rebuilt on every redraw.
+      // These layers (and their canvases) live as long as the panel, and move into each new stage.
+      let layerHosts = null
+      const BACKDROP = 'lines'
+      function stageLayers() {
+        const g = window.discordGlass
+        if (!g?.mountBackdrop) return null
+        if (!layerHosts) {
+          layerHosts = { bg: el('div', 'stage-bg'), grain: el('div', 'stage-grain'), spark: el('div', 'stage-spark') }
+          g.mountBackdrop(layerHosts.bg, BACKDROP)
+          g.mountNoise(layerHosts.grain)
+          g.mountSpark(layerHosts.spark)
+        }
+        return layerHosts
+      }
+      function sparkAt(key) {
+        const g = window.discordGlass
+        const from = glassHosts.get(key)
+        if (!g?.spark || !layerHosts || !from) return
+        const a = from.getBoundingClientRect(), b = layerHosts.spark.getBoundingClientRect()
+        g.spark(layerHosts.spark, a.left - b.left + a.width / 2, a.top - b.top + a.height / 2)
+      }
+
       let counterHost = null
+      let shinyHost = null
       const starHosts = new Map()
       let known = null
       function star(name, on) {
@@ -361,7 +393,15 @@
           title.append(pill)
         }
         head.append(title)
-        if (state.kind === 'starting') head.append(el('p', 'hint', 'Connecting to Discord Desktop…'))
+        if (state.kind === 'starting') {
+          const hint = el('p', 'hint')
+          if (window.discordGlass?.mountShiny) {
+            shinyHost ??= el('span', 'shiny-host')
+            window.discordGlass.mountShiny(shinyHost, 'Connecting to Discord Desktop…')
+            hint.append(shinyHost)
+          } else hint.append(document.createTextNode('Connecting to Discord Desktop…'))
+          head.append(hint)
+        }
         if (state.kind === 'unavailable') head.append(el('p', 'hint', state.reason))
         if (state.kind === 'idle') head.append(el('p', 'hint', 'You’re not in a voice room.'))
         if (microphone) {
@@ -375,7 +415,7 @@
           actions.append(glassButton('mic', muted ? 'Unmute mic' : 'Mute mic', {
             material: 'tinted', className: muted ? 'border border-solid border-white/40 bg-[#6d7cff] text-white' : 'border border-solid border-white/40 bg-[#e0475c] text-white',
             quiet: true, fallback: muted ? 'primary' : 'danger',
-            run: ({ quiet }) => act({ kind: 'microphone', muted: !muted }, { quiet })
+            run: ({ quiet }) => { sparkAt('mic'); return act({ kind: 'microphone', muted: !muted }, { quiet }) }
           }))
         }
         if (fix === 'authorize') actions.append(button('Authorize in Discord', () => act({ kind: 'authorize' }), 'primary'))
@@ -391,7 +431,12 @@
           // Clear glass bends what lies behind it, so the buttons sit on colour and fine lines. They are real
           // elements: the glass paints the page's backgrounds and gradients, but not pseudo-elements.
           const stage = el('div', 'stage')
+          // The moving backdrop is a canvas, which the glass cannot bend, so the coloured circles (plain CSS) sit
+          // above it and give the buttons something to refract.
+          const layers = stageLayers()
+          if (layers) { stage.classList.add('moving'); stage.append(layers.bg) }
           stage.append(el('div', 'stage-art'), actions)
+          if (layers) stage.append(layers.grain, layers.spark)
           head.append(stage)
         }
         parts.push(head)
