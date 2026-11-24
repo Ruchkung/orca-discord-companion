@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsc -p .",
+    "typecheck": "tsc -p . && tsc --noEmit -p panel",
     "build": "rolldown panel/island.tsx -f iife -o panel/dist/island.js --minify -p browser && tailwindcss -i panel/island.css -o panel/dist/island.css --minify"
   },
   "devDependencies": {
