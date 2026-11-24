@@ -1,5 +1,13 @@
+import { createRef, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { GlassButton } from './glass/glass-button'
+import ClickSpark, { type ClickSparkHandle } from './react-bits/click-spark'
+import Counter from './react-bits/counter'
+import DotGrid from './react-bits/dot-grid'
+import FloatingLines from './react-bits/floating-lines'
+import MicroSlats from './react-bits/micro-slats'
+import ShinyText from './react-bits/shiny-text'
+import StarBorder from './react-bits/star-border'
 
 export type GlassProps = {
   label: string
@@ -8,28 +16,126 @@ export type GlassProps = {
   className?: string
   /** Clear glass: how much tint covers what lies behind (0 to 1). */
   tint?: number
+  /** Clear glass: colour of the tint, and how much it frosts what shows through. */
+  tintColor?: string
+  blur?: number
+  /** A round button with only this icon; the label becomes its accessible name. */
+  icon?: 'enter' | 'popout'
   disabled: boolean
   /** A returned promise keeps the button pending until it settles. */
   onPress: () => unknown
 }
 
+const ICONS = {
+  enter: <><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="m10 17 5-5-5-5" /><path d="M15 12H3" /></>,
+  popout: <><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>
+}
+
 const roots = new WeakMap<HTMLElement, Root>()
 
 /** Draws a glass button into `host`; call again with new props to update it in place. */
-export function mountGlass(host: HTMLElement, { label, material, className, tint, disabled, onPress }: GlassProps): void {
+export function mountGlass(host: HTMLElement, { label, material, className, tint, tintColor, blur, icon, disabled, onPress }: GlassProps): void {
+  let root = roots.get(host)
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  const round = icon ? '!size-10 !px-0 ' : ''
+  root.render(
+    <GlassButton
+      material={material} size="md" tint={tint} blur={blur} live
+      optics={tintColor ? { tintColor, saturation: 1.25 } : undefined}
+      className={`${round}${className ?? ''}`} disabled={disabled} onClick={onPress}
+      aria-label={icon ? label : undefined}
+    >
+      {icon ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="!size-[18px]">{ICONS[icon]}</svg> : label}
+    </GlassButton>
+  )
+}
+
+/** Draws a number whose digits roll to each new value. */
+export function mountCounter(host: HTMLElement, value: number): void {
+  let root = roots.get(host)
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  root.render(<Counter value={value} intro={false} fontSize="1em" fontWeight="inherit" textColor="currentColor" />)
+}
+
+/** Lays a star that circles the edge over a roster row (on) or removes it (off). */
+export function showStar(host: HTMLElement, on: boolean): void {
+  let root = roots.get(host)
+  if (!on) {
+    root?.render(null)
+    return
+  }
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  root.render(
+    <StarBorder
+      as="div"
+      className="pointer-events-none !absolute !inset-0 !p-0"
+      radius={12}
+      thickness={1.5}
+      color="#3ddc84"
+      trailColor="#3ddc84"
+      backgroundColor="transparent"
+      borderColor="transparent"
+      hover="none"
+      clickPulse={false}
+      duration={3}
+    />
+  )
+}
+
+export type Backdrop = 'dots' | 'lines' | 'slats'
+
+/** Fills `host` with the moving backdrop that the glass buttons bend. */
+export function mountBackdrop(host: HTMLElement, kind: Backdrop): void {
   let root = roots.get(host)
   if (!root) {
     root = createRoot(host)
     roots.set(host, root)
   }
   root.render(
-    <GlassButton material={material} size="md" tint={tint} className={className} disabled={disabled} onClick={onPress}>
-      {label}
-    </GlassButton>
+    kind === 'dots'
+      ? <DotGrid dotSize={5} gap={16} baseColor="#5b6bff" activeColor="#ffd166" proximity={90} clickShock={false} />
+      : kind === 'lines'
+        ? <FloatingLines interactive={false} intro={false} backgroundColor="transparent" />
+        : <MicroSlats color="#7a5cf5" backgroundColor="#12143a" interactive={false} intro={false} />
   )
 }
 
-declare global {
-  interface Window { discordGlass?: { mountGlass: typeof mountGlass } }
+const sparks = new WeakMap<HTMLElement, RefObject<ClickSparkHandle | null>>()
+
+/** A layer that can burst sparks anywhere inside it. */
+export function mountSpark(host: HTMLElement): void {
+  if (roots.has(host)) return
+  const ref = createRef<ClickSparkHandle>()
+  sparks.set(host, ref)
+  const root = createRoot(host)
+  roots.set(host, root)
+  root.render(<ClickSpark ref={ref} sparkColor={['#ffd166', '#ff6b9d', '#ffffff']} sparkCount={9} sparkRadius={26} duration={500} />)
 }
-window.discordGlass = { mountGlass }
+
+export function spark(host: HTMLElement, x: number, y: number): void {
+  sparks.get(host)?.current?.spark(x, y)
+}
+
+/** Text with a light that sweeps across it. */
+export function mountShiny(host: HTMLElement, text: string): void {
+  let root = roots.get(host)
+  if (!root) {
+    root = createRoot(host)
+    roots.set(host, root)
+  }
+  root.render(<ShinyText text={text} color="currentColor" shineColor="#ffffff" speed={2.4} />)
+}
+
+declare global {
+  interface Window { discordGlass?: { mountGlass: typeof mountGlass; mountCounter: typeof mountCounter; showStar: typeof showStar; mountBackdrop: typeof mountBackdrop; mountSpark: typeof mountSpark; spark: typeof spark; mountShiny: typeof mountShiny } }
+}
+window.discordGlass = { mountGlass, mountCounter, showStar, mountBackdrop, mountSpark, spark, mountShiny }
